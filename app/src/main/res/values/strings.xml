@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">爱时间</string>
+
+    <!-- Top bar -->
+    <string name="top_today">今日</string>
+    <string name="top_pomodoro">番茄钟</string>
+    <string name="top_settings">设置</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_today">今日</string>
+    <string name="nav_history">历史</string>
+
+    <!-- Time categories -->
+    <string name="category_sleep">睡眠</string>
+    <string name="category_waste">浪费</string>
+    <string name="category_fixed">固定</string>
+    <string name="category_investment">投资</string>
+
+    <!-- Pie chart -->
+    <string name="pie_hours_unit">小时</string>
+    <string name="pie_hours_format">%.1fh</string>
+
+    <!-- Today screen: category buttons -->
+    <string name="btn_record">记录</string>
+    <string name="btn_tap_to_start">点击开始</string>
+    <string name="btn_tap_to_stop">点击停止</string>
+
+    <!-- Duration display -->
+    <string name="duration_hours_minutes">%1$d小时%2$d分钟</string>
+    <string name="duration_minutes">%d分钟</string>
+
+    <!-- Sleep input dialog -->
+    <string name="sleep_dialog_title">记录睡眠时间</string>
+    <string name="sleep_label_hours">小时</string>
+    <string name="sleep_label_minutes">分钟</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_save">保存</string>
+
+    <!-- Toast messages -->
+    <string name="toast_too_short">时间较短</string>
+
+    <!-- History screen -->
+    <string name="history_no_records">该日期暂无记录</string>
+    <string name="history_no_records_today">本日暂无记录</string>
+    <string name="history_no_records_week">本周暂无记录</string>
+    <string name="history_no_records_month">本月暂无记录</string>
+    <string name="history_week_total">本周记录</string>
+    <string name="history_month_total">本月记录</string>
+    <string name="calendar_month_format">yyyy年M月</string>
+    <string name="calendar_week_format">M月d日周</string>
+    <string name="calendar_prev_month">◀</string>
+    <string name="calendar_next_month">▶</string>
+    <string name="calendar_month_mode">月</string>
+    <string name="calendar_week_mode">周</string>
+
+    <!-- Pomodoro -->
+    <string name="pomodoro_focus">投入</string>
+    <string name="pomodoro_rest">休息</string>
+    <string name="pomodoro_custom">自定义</string>
+    <string name="pomodoro_custom_title">设置时间（分钟）</string>
+    <string name="pomodoro_start">开始</string>
+    <string name="pomodoro_pause">暂停</string>
+    <string name="pomodoro_resume">继续</string>
+    <string name="pomodoro_stop">停止</string>
+    <string name="pomodoro_focus_phase">专注中</string>
+    <string name="pomodoro_rest_phase">休息中</string>
+    <string name="pomodoro_done">完成！</string>
+    <string name="pomodoro_minutes_format">%d分钟</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="webdav_title">WebDAV 备份</string>
+    <string name="webdav_server">服务器地址</string>
+    <string name="webdav_server_hint">https://example.com/dav/</string>
+    <string name="webdav_username">用户名</string>
+    <string name="webdav_password">密码</string>
+    <string name="webdav_path">备份路径</string>
+    <string name="webdav_path_hint">timefriend_backup.json</string>
+    <string name="webdav_backup">备份</string>
+    <string name="webdav_sync">同步</string>
+    <string name="webdav_saving">保存配置…</string>
+    <string name="webdav_backing_up">正在备份…</string>
+    <string name="webdav_syncing">正在同步…</string>
+    <string name="webdav_backup_success">备份成功</string>
+    <string name="webdav_sync_success">同步成功</string>
+    <string name="webdav_error_empty">请填写完整信息</string>
+    <string name="webdav_error_network">网络错误：%s</string>
+
+    <!-- Permissions -->
+    <string name="permissions_title">权限管理</string>
+    <string name="perm_battery">电池无限制</string>
+    <string name="perm_battery_desc">允许后台运行，番茄钟倒计时不会被系统杀掉</string>
+    <string name="perm_notification">通知权限</string>
+    <string name="perm_notification_desc">允许发送通知，番茄钟后台运行时显示倒计时</string>
+    <string name="perm_tip">请保证软件处于后台锁定状态</string>
+    <string name="perm_granted">已授权</string>
+    <string name="perm_not_granted">未授权</string>
+
+    <!-- Calendar weekday headers -->
+    <string-array name="weekday_headers">
+        <item>日</item>
+        <item>一</item>
+        <item>二</item>
+        <item>三</item>
+        <item>四</item>
+        <item>五</item>
+        <item>六</item>
+    </string-array>
+</resources>
