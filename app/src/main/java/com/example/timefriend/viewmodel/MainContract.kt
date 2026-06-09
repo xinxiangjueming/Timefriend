@@ -22,7 +22,8 @@ data class MainState(
     val webDavPassword: String = "",
     val webDavPath: String = "timefriend_backup.json",
     val syncStatus: SyncStatus = SyncStatus.IDLE,
-    val syncMessage: String? = null
+    val syncMessage: String? = null,
+    val blurLevel: Float = 10f                 // nav bar blur radius
 )
 
 enum class SyncStatus { IDLE, LOADING, SUCCESS, ERROR }
@@ -43,6 +44,7 @@ sealed interface MainIntent {
     data class UpdateWebDavPath(val value: String) : MainIntent
     data object WebDavBackup : MainIntent
     data object WebDavSync : MainIntent
+    data class UpdateBlurLevel(val value: Float) : MainIntent
 }
 
 sealed interface MainEffect {

@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -114,29 +115,70 @@ fun MainScreen(
                 .background(MiuixTheme.colorScheme.background)
                 .layerBackdrop(backdrop)
         ) {
-            // Top bar — inside Column so content naturally flows below it
+            // Top bar — sliding pill toggle
             if (!state.showSettings && state.currentTab == 0) {
-                Row(
+                val topTabLabels = listOf(
+                    stringResource(R.string.top_today),
+                    stringResource(R.string.top_pomodoro)
+                )
+                val topTabAnim = remember { Animatable(0f) }
+                val topTabDensity = LocalDensity.current
+                LaunchedEffect(topTab) {
+                    val innerW = with(topTabDensity) { (200.dp - 4.dp * 2).toPx() }
+                    val chipW = innerW / topTabLabels.size
+                    topTabAnim.animateTo(
+                        chipW * topTab,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
+                    )
+                }
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp)
-                        .clip(RoundedCornerShape(GlobalCornerRadius))
-                        .squircleBackground(MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f), GlobalCornerRadius)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(top = 8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    TopTabItem(
-                        text = stringResource(R.string.top_today),
-                        selected = topTab == 0,
-                        onClick = { topTab = 0 }
-                    )
-                    TopTabItem(
-                        text = stringResource(R.string.top_pomodoro),
-                        selected = topTab == 1,
-                        onClick = { topTab = 1 }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .width(200.dp)
+                            .clip(RoundedCornerShape(GlobalCornerRadius))
+                            .background(MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f))
+                            .padding(4.dp)
+                    ) {
+                        // Pill
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(32.dp)
+                                .offset { IntOffset(topTabAnim.value.toInt(), 0) }
+                                .align(Alignment.CenterStart)
+                                .clip(RoundedCornerShape(GlobalCornerRadius))
+                                .background(MiuixTheme.colorScheme.primary)
+                        )
+                        // Labels
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            topTabLabels.forEachIndexed { index, label ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) { topTab = index }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (topTab == index) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (topTab == index) MiuixTheme.colorScheme.onPrimary
+                                                else MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -196,6 +238,8 @@ fun MainScreen(
                             },
                             onBack = { viewModel.handleIntent(MainIntent.HideSettings) },
                             onScrollingUp = { settingsScrollingUp = it },
+                            blurLevel = state.blurLevel,
+                            onBlurLevelChange = { viewModel.handleIntent(MainIntent.UpdateBlurLevel(it)) },
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(WindowInsets.statusBars.asPaddingValues())
@@ -387,8 +431,8 @@ fun MainScreen(
                         shape = { navBarShape },
                         effects = {
                             textureBlurEffect(
-                                blurRadiusX = 10f,
-                                blurRadiusY = 10f
+                                blurRadiusX = state.blurLevel,
+                                blurRadiusY = state.blurLevel
                             )
                         }
                     )
@@ -461,27 +505,3 @@ fun MainScreen(
     }
 }
 
-@Composable
-private fun TopTabItem(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val color = if (selected) {
-        MiuixTheme.colorScheme.onSurfaceContainer
-    } else {
-        MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
-    }
-    val fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-
-    Text(
-        text = text,
-        fontSize = 16.sp,
-        color = color,
-        fontWeight = fontWeight,
-        modifier = Modifier
-            .clip(RoundedCornerShape(GlobalCornerRadius))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp)
-    )
-}

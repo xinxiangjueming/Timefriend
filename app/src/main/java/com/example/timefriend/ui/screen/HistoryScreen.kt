@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -58,7 +61,7 @@ fun HistoryScreen(
     onSelectDate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var pieMode by remember { mutableStateOf(0) } // 0 = week, 1 = month
+    var pieMode by remember { mutableStateOf(0) } // 0 = day, 1 = week, 2 = month
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val calendarContent = @Composable {
@@ -69,9 +72,16 @@ fun HistoryScreen(
         )
     }
 
-    val pieRecords = if (pieMode == 0) weekRecords else monthRecords
-    val pieLabel = if (pieMode == 0) stringResource(R.string.history_week_total)
-                   else stringResource(R.string.history_month_total)
+    val pieRecords = when (pieMode) {
+        0 -> records
+        1 -> weekRecords
+        else -> monthRecords
+    }
+    val pieLabel = when (pieMode) {
+        0 -> stringResource(R.string.history_day_total)
+        1 -> stringResource(R.string.history_week_total)
+        else -> stringResource(R.string.history_month_total)
+    }
 
     val pieContent = @Composable {
         Card(
@@ -82,23 +92,65 @@ fun HistoryScreen(
                 modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Week/Month toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                // Day/Week/Month toggle with sliding pill
+                val chipLabels = listOf(
+                    stringResource(R.string.calendar_day_mode),
+                    stringResource(R.string.calendar_week_mode),
+                    stringResource(R.string.calendar_month_mode)
+                )
+                val chipAnim = remember { androidx.compose.animation.core.Animatable(0f) }
+                val chipDensity = androidx.compose.ui.platform.LocalDensity.current
+                LaunchedEffect(pieMode) {
+                    val containerWidthPx = with(chipDensity) { 200.dp.toPx() }
+                    val chipWidthPx = containerWidthPx / chipLabels.size
+                    chipAnim.animateTo(
+                        chipWidthPx * pieMode,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = 0.7f, stiffness = 400f
+                        )
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(GlobalCornerRadius))
+                        .background(MiuixTheme.colorScheme.surfaceContainerHigh)
+                        .padding(4.dp)
+                        .width(200.dp)
                 ) {
-                    PieModeChip(
-                        text = stringResource(R.string.calendar_week_mode),
-                        selected = pieMode == 0,
-                        onClick = { pieMode = 0 }
+                    // Pill
+                    val pillWidthFraction = 1f / chipLabels.size
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(pillWidthFraction)
+                            .height(32.dp)
+                            .offset { androidx.compose.ui.unit.IntOffset(chipAnim.value.toInt(), 0) }
+                            .align(Alignment.CenterStart)
+                            .clip(RoundedCornerShape(GlobalCornerRadius))
+                            .background(MiuixTheme.colorScheme.primary)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    PieModeChip(
-                        text = stringResource(R.string.calendar_month_mode),
-                        selected = pieMode == 1,
-                        onClick = { pieMode = 1 }
-                    )
+                    // Labels
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        chipLabels.forEachIndexed { index, label ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) { pieMode = index }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (pieMode == index) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (pieMode == index) MiuixTheme.colorScheme.onPrimary
+                                            else MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -115,8 +167,11 @@ fun HistoryScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (pieMode == 0) stringResource(R.string.history_no_records_week)
-                                   else stringResource(R.string.history_no_records_month),
+                            text = when (pieMode) {
+                                0 -> stringResource(R.string.history_no_records)
+                                1 -> stringResource(R.string.history_no_records_week)
+                                else -> stringResource(R.string.history_no_records_month)
+                            },
                             color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                             fontSize = 16.sp
                         )

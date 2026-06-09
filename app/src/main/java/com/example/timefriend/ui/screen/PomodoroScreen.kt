@@ -435,12 +435,13 @@ private fun TimerCircle(
         Button(
             onClick = onStop,
             modifier = Modifier
+                .fillMaxWidth(0.4f)
                 .height(48.dp)
                 .alpha(if (isRunning) 1f else 0f),
             enabled = isRunning,
             cornerRadius = GlobalCornerRadius,
             colors = ButtonDefaults.buttonColors(
-                color = Color(0xFF1A237E),
+                color = MiuixTheme.colorScheme.primary,
                 contentColor = Color.White,
                 disabledColor = Color.Transparent,
                 disabledContentColor = Color.Transparent

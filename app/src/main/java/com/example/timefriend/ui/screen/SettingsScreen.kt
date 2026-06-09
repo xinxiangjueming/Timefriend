@@ -37,6 +37,7 @@ import com.example.timefriend.ui.theme.GlobalCornerRadius
 import com.example.timefriend.viewmodel.SyncStatus
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
@@ -50,6 +51,8 @@ fun SettingsScreen(
     path: String,
     syncStatus: SyncStatus,
     statusMessage: String?,
+    blurLevel: Float,
+    onBlurLevelChange: (Float) -> Unit,
     batteryOptimized: Boolean,
     notificationGranted: Boolean,
     onServerChange: (String) -> Unit,
@@ -320,6 +323,36 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Blur level section
+        Card(
+            cornerRadius = GlobalCornerRadius,
+            colors = CardDefaults.defaultColors()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_blur_title),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = stringResource(R.string.settings_blur_level, blurLevel.toInt()),
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Slider(
+                    value = blurLevel,
+                    onValueChange = onBlurLevelChange,
+                    valueRange = 0f..60f,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

@@ -74,6 +74,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         val today = dateFormat.format(Date())
+        // Load blur level preference
+        val savedBlur = ctx.getSharedPreferences("settings_prefs", android.content.Context.MODE_PRIVATE)
+            .getFloat("blur_level", 10f)
+        setState { copy(blurLevel = savedBlur) }
+
         viewModelScope.launch {
             loadToday()
             loadRecordDates()
@@ -117,6 +122,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             is MainIntent.UpdateWebDavPath -> setState { copy(webDavPath = intent.value) }
             is MainIntent.WebDavBackup -> webDavBackup()
             is MainIntent.WebDavSync -> webDavSync()
+            is MainIntent.UpdateBlurLevel -> {
+                setState { copy(blurLevel = intent.value) }
+                ctx.getSharedPreferences("settings_prefs", android.content.Context.MODE_PRIVATE)
+                    .edit().putFloat("blur_level", intent.value).apply()
+            }
         }
     }
 
