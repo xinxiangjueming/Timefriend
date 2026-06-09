@@ -2,8 +2,11 @@ package com.example.timefriend.ui.screen
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -13,18 +16,27 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +64,9 @@ import com.example.timefriend.viewmodel.MainEffect
 import com.example.timefriend.viewmodel.MainIntent
 import com.example.timefriend.viewmodel.MainViewModel
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDefaults
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlurDefaults
@@ -61,13 +75,13 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlurEffect
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.squircle.squircleBackground
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Settings
 
 @Composable
 fun MainScreen(
@@ -131,14 +145,8 @@ fun MainScreen(
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { innerPadding ->
-                AnimatedContent(
-                    targetState = state.showSettings,
-                    transitionSpec = {
-                        fadeIn(tween(200)) togetherWith fadeOut(tween(200))
-                    },
-                    label = "settings_switch"
-                ) { showSettings ->
-                    if (showSettings) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (state.showSettings) {
                         val pm = context.getSystemService(android.os.PowerManager::class.java)
                         var batteryOptimized by remember { mutableStateOf(false) }
                         var notificationGranted by remember { mutableStateOf(false) }
@@ -192,7 +200,7 @@ fun MainScreen(
                                 .fillMaxSize()
                                 .padding(WindowInsets.statusBars.asPaddingValues())
                         )
-                    } else {
+                    } else { // main content
                     // Persistent Box: all screens stay composed, crossfade via alpha.
                     // zIndex ensures the active screen is on top for both drawing and hit testing.
                     val crossfadeSpec: AnimationSpec<Float> = tween(200)
@@ -315,7 +323,7 @@ fun MainScreen(
                         }
                     }
                     } // else (normal content)
-                } // AnimatedContent (settings_switch)
+                } // Box (settings_switch)
             }
         }
 
@@ -347,38 +355,106 @@ fun MainScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter
         ) {
-            FloatingNavigationBar(
-                color = MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f),
-                showDivider = true,
-                modifier = Modifier.drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { RoundedCornerShape(50.dp) },
-                    effects = {
-                        textureBlurEffect(
-                            blurRadiusX = BlurDefaults.BlurRadius,
-                            blurRadiusY = BlurDefaults.BlurRadius
-                        )
-                    }
-                )
+            val navBarShape = RoundedCornerShape(50.dp)
+            val selectedIndex = when {
+                state.showSettings -> 2
+                state.currentTab == 1 -> 1
+                else -> 0
+            }
+            val navItems = listOf(
+                Triple(Icons.Default.DateRange, stringResource(R.string.nav_today), 0),
+                Triple(Icons.AutoMirrored.Default.List, stringResource(R.string.nav_history), 1),
+                Triple(Icons.Default.Settings, stringResource(R.string.top_settings), 2)
+            )
+            val pillInset = 5.dp
+            val pillHeight = 54.dp
+            val pillAnim = remember { Animatable(0f) }
+            val density = LocalDensity.current
+            val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+            val horizontalPaddingPx = with(density) { FloatingNavigationBarDefaults.HorizontalOutSidePadding.toPx() }
+            LaunchedEffect(selectedIndex) {
+                val barWidthPx = screenWidthPx - horizontalPaddingPx * 2
+                val itemWidthPx = barWidthPx / navItems.size
+                val targetPx = itemWidthPx * selectedIndex + with(density) { pillInset.toPx() }
+                pillAnim.animateTo(targetPx, animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f))
+            }
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = FloatingNavigationBarDefaults.HorizontalOutSidePadding)
+                    .padding(bottom = 22.dp)
+                    .drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { navBarShape },
+                        effects = {
+                            textureBlurEffect(
+                                blurRadiusX = 10f,
+                                blurRadiusY = 10f
+                            )
+                        }
+                    )
+                    .clip(navBarShape)
+                    .background(
+                        MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+                        navBarShape
+                    )
+                    .height(64.dp)
+                    .fillMaxWidth()
             ) {
-                FloatingNavigationBarItem(
-                    selected = state.currentTab == 0,
-                    onClick = { viewModel.handleIntent(MainIntent.SwitchTab(0)) },
-                    icon = Icons.Default.DateRange,
-                    label = stringResource(R.string.nav_today)
-                )
-                FloatingNavigationBarItem(
-                    selected = state.currentTab == 1,
-                    onClick = { viewModel.handleIntent(MainIntent.SwitchTab(1)) },
-                    icon = Icons.AutoMirrored.Default.List,
-                    label = stringResource(R.string.nav_history)
-                )
-                FloatingNavigationBarItem(
-                    selected = state.showSettings,
-                    onClick = { viewModel.handleIntent(MainIntent.ShowSettings) },
-                    icon = MiuixIcons.Settings,
-                    label = stringResource(R.string.top_settings)
-                )
+                // Sliding pill indicator
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val itemWidth = maxWidth / navItems.size
+                    val pw = itemWidth - pillInset * 2
+                    val yPx = with(density) { 5.dp.roundToPx() }
+                    Box(
+                        modifier = Modifier
+                            .offset { IntOffset(pillAnim.value.toInt(), yPx) }
+                            .size(pw, pillHeight)
+                            .align(Alignment.TopStart)
+                            .clip(navBarShape)
+                            .background(Color.White.copy(alpha = 0.2f))
+                    )
+                }
+                // Navigation items
+                Row(modifier = Modifier.fillMaxSize()) {
+                    navItems.forEachIndexed { _, (icon, label, index) ->
+                        val isSelected = index == selectedIndex
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    when (index) {
+                                        0 -> viewModel.handleIntent(MainIntent.SwitchTab(0))
+                                        1 -> viewModel.handleIntent(MainIntent.SwitchTab(1))
+                                        2 -> viewModel.handleIntent(MainIntent.ShowSettings)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label,
+                                    modifier = Modifier.size(22.dp),
+                                    tint = MiuixTheme.colorScheme.onSurfaceContainer.copy(
+                                        alpha = if (isSelected) 1f else 0.4f
+                                    )
+                                )
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = MiuixTheme.colorScheme.onSurfaceContainer.copy(
+                                        alpha = if (isSelected) 1f else 0.4f
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         } // AnimatedVisibility
