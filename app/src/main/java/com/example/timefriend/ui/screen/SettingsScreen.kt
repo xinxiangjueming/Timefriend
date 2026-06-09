@@ -1,6 +1,8 @@
 package com.example.timefriend.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,6 +61,7 @@ fun SettingsScreen(
     onRequestBattery: () -> Unit,
     onRequestNotification: () -> Unit,
     onBack: () -> Unit,
+    onScrollingUp: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isLoading = syncStatus == SyncStatus.LOADING
@@ -71,9 +75,22 @@ fun SettingsScreen(
         else -> MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.6f)
     }
 
+    val nestedScrollConnection = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                // available.y < 0 → scrolling up (finger moves up) → hide bottom bar
+                // available.y > 0 → scrolling down (finger moves down) → show bottom bar
+                if (available.y < -5) onScrollingUp(true)
+                else if (available.y > 5) onScrollingUp(false)
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
+            .nestedScroll(nestedScrollConnection)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
@@ -296,7 +313,10 @@ fun SettingsScreen(
                             text = stringResource(R.string.perm_tip),
                             fontSize = 13.sp,
                             color = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(top = 4.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
@@ -359,7 +379,7 @@ private fun PermissionItem(
                         )
                     ) {
                         Text(
-                            text = "去授权",
+                            text = stringResource(R.string.perm_grant_button),
                             fontSize = 13.sp,
                             color = androidx.compose.ui.graphics.Color.White
                         )
@@ -387,34 +407,34 @@ private fun SettingsTextField(
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        cornerRadius = GlobalCornerRadius,
-        colors = CardDefaults.defaultColors()
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            enabled = enabled,
-            singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(
-                fontSize = 15.sp,
-                color = if (enabled) MiuixTheme.colorScheme.onSurface
-                        else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-            ),
-            cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
-            decorationBox = { innerTextField ->
-                if (value.isEmpty() && hint.isNotEmpty()) {
-                    Text(
-                        text = hint,
-                        fontSize = 15.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                    )
-                }
-                innerTextField()
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = MiuixTheme.colorScheme.outline,
+                shape = RoundedCornerShape(GlobalCornerRadius)
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        enabled = enabled,
+        singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(
+            fontSize = 15.sp,
+            color = if (enabled) MiuixTheme.colorScheme.onSurface
+                    else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+        ),
+        cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+        decorationBox = { innerTextField ->
+            if (value.isEmpty() && hint.isNotEmpty()) {
+                Text(
+                    text = hint,
+                    fontSize = 15.sp,
+                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                )
             }
-        )
-    }
+            innerTextField()
+        }
+    )
 }

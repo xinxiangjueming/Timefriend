@@ -97,6 +97,27 @@
     <string name="perm_tip">请保证软件处于后台锁定状态</string>
     <string name="perm_granted">已授权</string>
     <string name="perm_not_granted">未授权</string>
+    <string name="perm_grant_button">去授权</string>
+
+    <!-- Pomodoro notification -->
+    <string name="pomodoro_channel_name">番茄钟</string>
+    <string name="pomodoro_channel_desc">番茄钟倒计时通知</string>
+    <string name="pomodoro_notif_focus">番茄钟</string>
+    <string name="pomodoro_notif_rest">休息</string>
+    <string name="pomodoro_notif_stop">停止</string>
+    <string name="pomodoro_notif_paused">已暂停</string>
+    <string name="pomodoro_notif_running">进行中</string>
+
+    <!-- Timer notification -->
+    <string name="timer_channel_name">计时器</string>
+    <string name="timer_channel_desc">时间记录计时通知</string>
+    <string name="timer_notif_idle_title">点击开始计时</string>
+    <string name="timer_notif_tap_start">点击下方按钮开始</string>
+    <string name="timer_notif_timing">计时中</string>
+    <string name="timer_notif_stop">停止</string>
+
+    <!-- WebDAV extra -->
+    <string name="webdav_no_backup">云端无备份文件</string>
 
     <!-- Calendar weekday headers -->
     <string-array name="weekday_headers">

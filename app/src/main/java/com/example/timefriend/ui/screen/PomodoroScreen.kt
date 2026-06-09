@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.example.timefriend.R
 import com.example.timefriend.data.TimeCategory
 import com.example.timefriend.service.PomodoroService
+import kotlinx.coroutines.delay
 import com.example.timefriend.ui.theme.GlobalCornerRadius
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -135,11 +136,35 @@ fun PomodoroScreen(
         }
         val filter = android.content.IntentFilter(PomodoroService.ACTION_STATE_UPDATE)
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        // Request current state from service (in case service is already running)
+        // Request current state from service
         context.sendBroadcast(
             android.content.Intent(PomodoroService.ACTION_REQUEST_STATE).setPackage(context.packageName)
         )
         onDispose { try { context.unregisterReceiver(receiver) } catch (_: Exception) {} }
+    }
+
+    // Fallback: if service didn't respond within 500ms, it's dead → reset UI
+    LaunchedEffect(isRunning) {
+        if (isRunning) {
+            delay(500)
+            if (isRunning && remainingSeconds == 0) {
+                isRunning = false
+                isFocusPhase = true
+                remainingSeconds = focusMinutes * 60
+            }
+        }
+    }
+
+    // Safety net: if remaining hits 0 while "running", the service is gone → reset
+    LaunchedEffect(remainingSeconds, isRunning) {
+        if (isRunning && remainingSeconds == 0) {
+            delay(600)
+            if (isRunning && remainingSeconds == 0) {
+                isRunning = false
+                isFocusPhase = true
+                remainingSeconds = focusMinutes * 60
+            }
+        }
     }
 
     if (showCustomDialog) {

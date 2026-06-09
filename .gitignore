@@ -1,15 +1,68 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# Built application files
+*.apk
+*.aab
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java/ Kotlin class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, signing configs, etc.)
 local.properties
+
+# Android Studio
+*.iml
+.idea/
+.navigation/
+captures/
+
+# External native build
+.externalNativeBuild/
+.cxx/
+
+# NDK
+obj/
+
+# Keystore files (signing keys — NEVER commit)
+*.jks
+*.keystore
+
+# Google Services (Firebase etc.)
+google-services.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Log files
+*.log
+
+# Crashlytics
+crashlytics.properties
+crashlytics-build.properties
+
+# Misc
+/captures
+*.hprof

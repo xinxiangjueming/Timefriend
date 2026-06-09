@@ -19,6 +19,7 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.example.timefriend.MainActivity
+import com.example.timefriend.R
 import kotlinx.coroutines.*
 
 class PomodoroService : Service() {
@@ -182,10 +183,10 @@ class PomodoroService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "番茄钟",
+            getString(R.string.pomodoro_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "番茄钟倒计时通知"
+            description = getString(R.string.pomodoro_channel_desc)
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
@@ -196,7 +197,7 @@ class PomodoroService : Service() {
         val mm = remainingSeconds / 60
         val ss = remainingSeconds % 60
         val timeText = String.format("%02d:%02d", mm, ss)
-        val phaseText = if (isFocusPhase) "番茄钟" else "休息"
+        val phaseText = if (isFocusPhase) getString(R.string.pomodoro_notif_focus) else getString(R.string.pomodoro_notif_rest)
 
         // Open app intent
         val openIntent = PendingIntent.getActivity(
@@ -206,13 +207,20 @@ class PomodoroService : Service() {
         )
 
         // Stop action
-        val stopIntent = PendingIntent.getService(
-            this, 1,
-            Intent(this, PomodoroService::class.java).apply { action = ACTION_STOP },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val stopActionIntent = Intent(this, PomodoroService::class.java).apply { action = ACTION_STOP }
+        val stopIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(
+                this, 1, stopActionIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            PendingIntent.getService(
+                this, 1, stopActionIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
         val stopAction = Notification.Action.Builder(
-            null, "停止", stopIntent
+            null, getString(R.string.pomodoro_notif_stop), stopIntent
         ).build()
 
         // Build with platform Notification.Builder (not NotificationCompat)
@@ -248,7 +256,7 @@ class PomodoroService : Service() {
                 put("hintInfo", org.json.JSONArray().apply {
                     put(org.json.JSONObject().apply {
                         put("type", "text")
-                        put("content", if (isPaused) "已暂停" else "进行中")
+                        put("content", if (isPaused) getString(R.string.pomodoro_notif_paused) else getString(R.string.pomodoro_notif_running))
                     })
                 })
             }

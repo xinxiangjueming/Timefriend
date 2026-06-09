@@ -1,13 +1,16 @@
 package com.example.timefriend.ui.screen
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -74,6 +78,7 @@ fun MainScreen(
     val context = LocalContext.current
     var toastMessage by remember { mutableStateOf<String?>(null) }
     var topTab by remember { mutableIntStateOf(0) }
+    var settingsScrollingUp by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
@@ -129,13 +134,7 @@ fun MainScreen(
                 AnimatedContent(
                     targetState = state.showSettings,
                     transitionSpec = {
-                        if (targetState) {
-                            slideInHorizontally(tween(300)) { it } + fadeIn(tween(300)) togetherWith
-                                slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(300))
-                        } else {
-                            slideInHorizontally(tween(300)) { -it } + fadeIn(tween(300)) togetherWith
-                                slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300))
-                        }
+                        fadeIn(tween(200)) togetherWith fadeOut(tween(200))
                     },
                     label = "settings_switch"
                 ) { showSettings ->
@@ -188,43 +187,38 @@ fun MainScreen(
                                 notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                             },
                             onBack = { viewModel.handleIntent(MainIntent.HideSettings) },
+                            onScrollingUp = { settingsScrollingUp = it },
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(WindowInsets.statusBars.asPaddingValues())
                         )
                     } else {
-                    AnimatedContent(
-                        targetState = Pair(state.currentTab, topTab),
-                        transitionSpec = {
-                            if (targetState.second >= initialState.second) {
-                                slideInHorizontally(tween(300)) { it } + fadeIn(tween(300)) togetherWith
-                                    slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(300))
-                            } else {
-                                slideInHorizontally(tween(300)) { -it } + fadeIn(tween(300)) togetherWith
-                                    slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300))
-                            }
-                        },
-                        label = "tab_switch"
-                    ) { (bottomTab, activeTopTab) ->
-                        when (bottomTab) {
-                            0 -> when (activeTopTab) {
-                                0 -> TodayScreen(
-                                    records = state.todayRecords,
-                                    activeCategory = state.activeCategory,
-                                    timerElapsed = state.timerElapsed,
-                                    onStartTimer = { viewModel.handleIntent(MainIntent.StartTimer(it)) },
-                                    onStopTimer = { viewModel.handleIntent(MainIntent.StopTimer) },
-                                    onSaveSleep = { viewModel.handleIntent(MainIntent.SaveSleep(it)) },
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                1 -> PomodoroScreen(
-                                    onSaveRecord = { category, minutes ->
-                                        viewModel.handleIntent(MainIntent.SavePomodoroRecord(category, minutes))
-                                    },
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                            1 -> HistoryScreen(
+                    // Persistent Box: all screens stay composed, crossfade via alpha.
+                    // zIndex ensures the active screen is on top for both drawing and hit testing.
+                    val crossfadeSpec: AnimationSpec<Float> = tween(200)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        val historyAlpha by animateFloatAsState(
+                            targetValue = if (state.currentTab == 1) 1f else 0f,
+                            animationSpec = crossfadeSpec,
+                            label = "history_fade"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(if (state.currentTab == 1) 2f else 0f)
+                                .alpha(historyAlpha)
+                                .pointerInput(state.currentTab) {
+                                    if (state.currentTab != 1) {
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                e.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    }
+                                }
+                        ) {
+                            HistoryScreen(
                                 records = state.historyRecords,
                                 weekRecords = state.weekRecords,
                                 monthRecords = state.monthRecords,
@@ -235,6 +229,89 @@ fun MainScreen(
                                     .fillMaxSize()
                                     .padding(WindowInsets.statusBars.asPaddingValues())
                             )
+                        }
+
+                        val todayAlpha by animateFloatAsState(
+                            targetValue = if (state.currentTab == 0) 1f else 0f,
+                            animationSpec = crossfadeSpec,
+                            label = "today_fade"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(if (state.currentTab == 0) 2f else 0f)
+                                .alpha(todayAlpha)
+                                .pointerInput(state.currentTab) {
+                                    if (state.currentTab != 0) {
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                e.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    }
+                                }
+                        ) {
+                            val pomodoroAlpha by animateFloatAsState(
+                                targetValue = if (topTab == 1) 1f else 0f,
+                                animationSpec = crossfadeSpec,
+                                label = "pomodoro_fade"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .zIndex(if (topTab == 1) 2f else 0f)
+                                    .alpha(pomodoroAlpha)
+                                    .pointerInput(topTab) {
+                                        if (topTab != 1) {
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                    e.changes.forEach { it.consume() }
+                                                }
+                                            }
+                                        }
+                                    }
+                            ) {
+                                PomodoroScreen(
+                                    onSaveRecord = { category, minutes ->
+                                        viewModel.handleIntent(MainIntent.SavePomodoroRecord(category, minutes))
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+
+                            val todayTabAlpha by animateFloatAsState(
+                                targetValue = if (topTab == 0) 1f else 0f,
+                                animationSpec = crossfadeSpec,
+                                label = "today_tab_fade"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .zIndex(if (topTab == 0) 2f else 0f)
+                                    .alpha(todayTabAlpha)
+                                    .pointerInput(topTab) {
+                                        if (topTab != 0) {
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                    e.changes.forEach { it.consume() }
+                                                }
+                                            }
+                                        }
+                                    }
+                            ) {
+                                TodayScreen(
+                                    records = state.todayRecords,
+                                    activeCategory = state.activeCategory,
+                                    timerElapsed = state.timerElapsed,
+                                    onStartTimer = { viewModel.handleIntent(MainIntent.StartTimer(it)) },
+                                    onStopTimer = { viewModel.handleIntent(MainIntent.StopTimer) },
+                                    onSaveSleep = { viewModel.handleIntent(MainIntent.SaveSleep(it)) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                     }
                     } // else (normal content)
@@ -259,6 +336,13 @@ fun MainScreen(
         }
 
         // Layer 4: floating nav bar with blur + settings
+        val showBottomBar = !state.showSettings || !settingsScrollingUp
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showBottomBar,
+            enter = androidx.compose.animation.slideInVertically(tween(200)) { it },
+            exit = androidx.compose.animation.slideOutVertically(tween(200)) { it },
+            modifier = Modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter
@@ -297,6 +381,7 @@ fun MainScreen(
                 )
             }
         }
+        } // AnimatedVisibility
     }
 }
 

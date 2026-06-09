@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 同 parent，仅覆盖窗口背景色和状态栏图标颜色 -->
+    <style name="Theme.Timefriend" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

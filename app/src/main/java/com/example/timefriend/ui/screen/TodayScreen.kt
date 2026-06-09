@@ -146,12 +146,12 @@ fun TodayScreen(
                             Text(
                                 text = stringResource(activeCategory.displayNameRes),
                                 fontSize = 14.sp,
-                                color = Color(0xFFE53935)
+                                color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                             Text(
                                 text = formatElapsed(timerElapsed),
                                 fontSize = 28.sp,
-                                color = MiuixTheme.colorScheme.onSurface
+                                color = categoryColor(activeCategory)
                             )
                         }
                     }
@@ -227,7 +227,7 @@ fun TodayScreen(
                         Text(
                             text = formatElapsed(timerElapsed),
                             fontSize = 32.sp,
-                            color = MiuixTheme.colorScheme.onSurface
+                            color = categoryColor(activeCategory)
                         )
                     }
                 }

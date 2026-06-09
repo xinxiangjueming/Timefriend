@@ -1,12 +1,19 @@
 package com.example.timefriend.viewmodel
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import com.example.timefriend.R
 import androidx.lifecycle.viewModelScope
 import com.example.timefriend.data.TimeCategory
 import com.example.timefriend.data.TimeRecord
 import com.example.timefriend.data.TimeRepository
 import com.example.timefriend.data.WebDavHelper
+import com.example.timefriend.service.TimerService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -22,6 +29,7 @@ import java.util.Locale
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val ctx get() = getApplication<Application>()
     private val repo = TimeRepository(application)
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
@@ -34,6 +42,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var timerJob: Job? = null
 
+    // ── Timer service broadcast receiver ──
+
+    private val timerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val catName = intent.getStringExtra(TimerService.EXTRA_CATEGORY)
+            val elapsed = intent.getLongExtra(TimerService.EXTRA_ELAPSED_MS, 0L)
+            val tooShort = intent.getBooleanExtra(TimerService.EXTRA_TOO_SHORT, false)
+
+            if (catName != null) {
+                val cat = TimeCategory.valueOf(catName)
+                setState { copy(activeCategory = cat, timerElapsed = elapsed) }
+            } else {
+                setState { copy(activeCategory = null, timerElapsed = 0L) }
+            }
+
+            if (tooShort) {
+                viewModelScope.launch { _effect.send(MainEffect.TooShort) }
+            }
+
+            // Timer stopped (category null) → refresh records
+            if (catName == null) {
+                viewModelScope.launch {
+                    loadToday()
+                    loadRecordDates()
+                    loadHistory(currentState.selectedDate)
+                }
+            }
+        }
+    }
+
     init {
         val today = dateFormat.format(Date())
         viewModelScope.launch {
@@ -43,6 +81,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             loadWeekRecords(today)
             loadMonthRecords(today)
         }
+
+        // Register timer service receiver and start the service for persistent notification
+        val filter = IntentFilter(TimerService.ACTION_STATE_UPDATE)
+        ContextCompat.registerReceiver(ctx, timerReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.startForegroundService(
+            ctx, Intent(ctx, TimerService::class.java)
+        )
+        // Request current state in case service is already running
+        ctx.sendBroadcast(Intent(TimerService.ACTION_QUERY).setPackage(ctx.packageName))
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try { ctx.unregisterReceiver(timerReceiver) } catch (_: Exception) {}
     }
 
     fun handleIntent(intent: MainIntent) {
@@ -88,49 +140,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (category == TimeCategory.SLEEP) return
         if (currentState.activeCategory != null) return
 
-        val now = System.currentTimeMillis()
-        setState { copy(activeCategory = category, activeStartTime = now, timerElapsed = 0L) }
+        // Eagerly update UI, service will send precise state via broadcast
+        setState { copy(activeCategory = category, timerElapsed = 0L) }
 
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            while (true) {
-                delay(1000)
-                val elapsed = System.currentTimeMillis() - currentState.activeStartTime
-                setState { copy(timerElapsed = elapsed) }
+        ctx.startService(
+            Intent(ctx, TimerService::class.java).apply {
+                action = TimerService.ACTION_START
+                putExtra(TimerService.EXTRA_CATEGORY, category.name)
             }
-        }
+        )
     }
 
     private fun stopTimer() {
-        val category = currentState.activeCategory ?: return
-        val startTime = currentState.activeStartTime
-        val endTime = System.currentTimeMillis()
+        if (currentState.activeCategory == null) return
 
-        timerJob?.cancel()
-        timerJob = null
-
-        val durationMs = endTime - startTime
-        if (durationMs < 3 * 60 * 1000L) {
-            setState { copy(activeCategory = null, activeStartTime = 0L, timerElapsed = 0L) }
-            viewModelScope.launch { _effect.send(MainEffect.TooShort) }
-            return
-        }
-
-        val record = TimeRecord(
-            category = category,
-            startTime = startTime,
-            endTime = endTime,
-            date = repo.todayDateString()
+        ctx.startService(
+            Intent(ctx, TimerService::class.java).apply {
+                action = TimerService.ACTION_STOP
+            }
         )
-
-        setState { copy(activeCategory = null, activeStartTime = 0L, timerElapsed = 0L) }
-
-        viewModelScope.launch {
-            repo.saveRecord(record)
-            loadToday()
-            loadRecordDates()
-            loadHistory(currentState.selectedDate)
-        }
     }
 
     private fun saveSleep(minutes: Int) {
@@ -237,7 +265,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun webDavBackup() {
         val s = currentState
         if (s.webDavServer.isBlank() || s.webDavUsername.isBlank() || s.webDavPath.isBlank()) {
-            setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = "请填写完整信息") }
+            setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = ctx.getString(R.string.webdav_error_empty)) }
             return
         }
         setState { copy(syncStatus = SyncStatus.LOADING, syncMessage = null) }
@@ -246,10 +274,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val json = repo.exportAllJson()
                 WebDavHelper(s.webDavServer, s.webDavUsername, s.webDavPassword, s.webDavPath)
                     .upload(json)
-                setState { copy(syncStatus = SyncStatus.SUCCESS, syncMessage = "备份成功") }
+                setState { copy(syncStatus = SyncStatus.SUCCESS, syncMessage = ctx.getString(R.string.webdav_backup_success)) }
                 loadToday(); loadRecordDates(); loadHistory(currentState.selectedDate)
             } catch (e: Exception) {
-                setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = "网络错误：${e.message}") }
+                setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = ctx.getString(R.string.webdav_error_network, e.message)) }
             }
         }
     }
@@ -257,7 +285,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun webDavSync() {
         val s = currentState
         if (s.webDavServer.isBlank() || s.webDavUsername.isBlank() || s.webDavPath.isBlank()) {
-            setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = "请填写完整信息") }
+            setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = ctx.getString(R.string.webdav_error_empty)) }
             return
         }
         setState { copy(syncStatus = SyncStatus.LOADING, syncMessage = null) }
@@ -267,13 +295,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .download()
                 if (json != null) {
                     repo.importAllJson(json)
-                    setState { copy(syncStatus = SyncStatus.SUCCESS, syncMessage = "同步成功") }
+                    setState { copy(syncStatus = SyncStatus.SUCCESS, syncMessage = ctx.getString(R.string.webdav_sync_success)) }
                 } else {
-                    setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = "云端无备份文件") }
+                    setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = ctx.getString(R.string.webdav_no_backup)) }
                 }
                 loadToday(); loadRecordDates(); loadHistory(currentState.selectedDate)
             } catch (e: Exception) {
-                setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = "网络错误：${e.message}") }
+                setState { copy(syncStatus = SyncStatus.ERROR, syncMessage = ctx.getString(R.string.webdav_error_network, e.message)) }
             }
         }
     }
