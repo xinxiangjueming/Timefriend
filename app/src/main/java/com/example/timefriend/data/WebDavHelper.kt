@@ -39,9 +39,10 @@ class WebDavHelper(
             .header("Authorization", credentials)
             .put(json.toRequestBody(jsonMedia))
             .build()
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw RuntimeException("Upload failed: ${response.code} ${response.message}")
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw RuntimeException("Upload failed: ${response.code} ${response.message}")
+            }
         }
     }
 
@@ -55,11 +56,12 @@ class WebDavHelper(
             .header("Authorization", credentials)
             .get()
             .build()
-        val response = client.newCall(request).execute()
-        when {
-            response.isSuccessful -> response.body?.string()
-            response.code == 404 -> null
-            else -> throw RuntimeException("Download failed: ${response.code} ${response.message}")
+        client.newCall(request).execute().use { response ->
+            when {
+                response.isSuccessful -> response.body?.string()
+                response.code == 404 -> null
+                else -> throw RuntimeException("Download failed: ${response.code} ${response.message}")
+            }
         }
     }
 }

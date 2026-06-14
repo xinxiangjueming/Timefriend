@@ -3,11 +3,13 @@ package com.example.timefriend.data
 import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class TimeRepository(context: Context) {
@@ -15,9 +17,12 @@ class TimeRepository(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("timefriend_records", Context.MODE_PRIVATE)
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.getDefault())
 
-    fun todayDateString(): String = dateFormat.format(Date())
+    /** Protects read-modify-write cycles on per-date records. */
+    private val writeMutex = Mutex()
+
+    fun todayDateString(): String = LocalDate.now().format(dateFormat)
 
     suspend fun getRecords(date: String): List<TimeRecord> = withContext(Dispatchers.IO) {
         val json = prefs.getString(date, null) ?: return@withContext emptyList()
@@ -38,18 +43,22 @@ class TimeRepository(context: Context) {
         }
     }
 
-    suspend fun saveRecord(record: TimeRecord) = withContext(Dispatchers.IO) {
-        val existing = getRecordsSync(record.date).toMutableList()
-        existing.add(record)
-        saveRecordsSync(record.date, existing)
+    suspend fun saveRecord(record: TimeRecord) = writeMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val existing = getRecordsSync(record.date).toMutableList()
+            existing.add(record)
+            saveRecordsSync(record.date, existing)
+        }
     }
 
-    suspend fun replaceRecord(record: TimeRecord) = withContext(Dispatchers.IO) {
-        val existing = getRecordsSync(record.date)
-            .filter { it.category != record.category }
-            .toMutableList()
-        existing.add(record)
-        saveRecordsSync(record.date, existing)
+    suspend fun replaceRecord(record: TimeRecord) = writeMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val existing = getRecordsSync(record.date)
+                .filter { it.category != record.category }
+                .toMutableList()
+            existing.add(record)
+            saveRecordsSync(record.date, existing)
+        }
     }
 
     suspend fun getRecordDates(): Set<String> = withContext(Dispatchers.IO) {
@@ -73,13 +82,15 @@ class TimeRepository(context: Context) {
      * Import record data from a JSON string, merging into existing data.
      * For each date, the imported records replace existing ones.
      */
-    suspend fun importAllJson(json: String) = withContext(Dispatchers.IO) {
-        val obj = JSONObject(json)
-        val editor = prefs.edit()
-        for (key in obj.keys()) {
-            editor.putString(key, obj.getString(key))
+    suspend fun importAllJson(json: String) = writeMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val obj = JSONObject(json)
+            val editor = prefs.edit()
+            for (key in obj.keys()) {
+                editor.putString(key, obj.getString(key))
+            }
+            editor.apply()
         }
-        editor.apply()
     }
 
     // Internal synchronous helpers — only called from within withContext(Dispatchers.IO)

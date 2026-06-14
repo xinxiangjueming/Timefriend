@@ -14,33 +14,34 @@ import com.example.timefriend.data.TimeRecord
 import com.example.timefriend.data.TimeRepository
 import com.example.timefriend.data.WebDavHelper
 import com.example.timefriend.service.TimerService
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val ctx get() = getApplication<Application>()
     private val repo = TimeRepository(application)
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.getDefault())
 
-    private val _state = MutableStateFlow(MainState(selectedDate = dateFormat.format(Date())))
+    private val _state = MutableStateFlow(MainState(selectedDate = LocalDate.now().format(dateFormat)))
     val state: StateFlow<MainState> = _state.asStateFlow()
     private val currentState: MainState get() = _state.value
 
     private val _effect = Channel<MainEffect>(Channel.BUFFERED)
     val effect = _effect.receiveAsFlow()
-
-    private var timerJob: Job? = null
 
     // ── Timer service broadcast receiver ──
 
@@ -73,7 +74,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        val today = dateFormat.format(Date())
+        val today = LocalDate.now().format(dateFormat)
         // Load blur level preference
         val savedBlur = ctx.getSharedPreferences("settings_prefs", android.content.Context.MODE_PRIVATE)
             .getFloat("blur_level", 10f)
@@ -205,28 +206,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun loadWeekRecords(dateStr: String) {
-        val cal = Calendar.getInstance()
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        cal.time = sdf.parse(dateStr) ?: Date()
-        cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+        val date = LocalDate.parse(dateStr, dateFormat)
+        val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val weekRecords = mutableListOf<TimeRecord>()
-        repeat(7) {
-            weekRecords.addAll(repo.getRecords(sdf.format(cal.time)))
-            cal.add(Calendar.DAY_OF_MONTH, 1)
+        repeat(7) { i ->
+            weekRecords.addAll(repo.getRecords(weekStart.plusDays(i.toLong()).format(dateFormat)))
         }
         setState { copy(weekRecords = weekRecords) }
     }
 
     private suspend fun loadMonthRecords(dateStr: String) {
-        val cal = Calendar.getInstance()
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        cal.time = sdf.parse(dateStr) ?: Date()
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val date = LocalDate.parse(dateStr, dateFormat)
+        val month = YearMonth.from(date)
+        val daysInMonth = month.lengthOfMonth()
         val monthRecords = mutableListOf<TimeRecord>()
-        repeat(daysInMonth) {
-            monthRecords.addAll(repo.getRecords(sdf.format(cal.time)))
-            cal.add(Calendar.DAY_OF_MONTH, 1)
+        for (day in 1..daysInMonth) {
+            monthRecords.addAll(repo.getRecords(month.atDay(day).format(dateFormat)))
         }
         setState { copy(monthRecords = monthRecords) }
     }
@@ -245,10 +240,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = currentState.reducer()
     }
 
-    // ── WebDAV settings persistence ──
+    // ── WebDAV settings persistence (encrypted) ──
 
-    private val webDavPrefs =
-        application.getSharedPreferences("webdav_prefs", android.content.Context.MODE_PRIVATE)
+    private val webDavPrefs: SharedPreferences = run {
+        val masterKey = MasterKey.Builder(application)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            application,
+            "webdav_prefs_encrypted",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        ).also { encrypted ->
+            // One-time migration: copy any existing plaintext prefs into encrypted storage
+            val legacy = application.getSharedPreferences("webdav_prefs", Context.MODE_PRIVATE)
+            if (legacy.all.isNotEmpty()) {
+                encrypted.edit().apply {
+                    legacy.all.forEach { (key, value) ->
+                        if (value is String && !encrypted.contains(key)) putString(key, value)
+                    }
+                    apply()
+                }
+                legacy.edit().clear().apply()
+            }
+        }
+    }
 
     private fun loadWebDavSettings() {
         setState {

@@ -115,8 +115,8 @@ fun MainScreen(
                 .background(MiuixTheme.colorScheme.background)
                 .layerBackdrop(backdrop)
         ) {
-            // Top bar — sliding pill toggle
-            if (!state.showSettings && state.currentTab == 0) {
+            // Top bar — always composed to reserve layout space; invisible when not on Today tab.
+            run {
                 val topTabLabels = listOf(
                     stringResource(R.string.top_today),
                     stringResource(R.string.top_pomodoro)
@@ -131,11 +131,13 @@ fun MainScreen(
                         animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
                     )
                 }
+                val topBarAlpha = if (!state.showSettings && state.currentTab == 0) 1f else 0f
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 8.dp),
+                        .padding(top = 8.dp)
+                        .alpha(topBarAlpha),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
@@ -240,9 +242,7 @@ fun MainScreen(
                             onScrollingUp = { settingsScrollingUp = it },
                             blurLevel = state.blurLevel,
                             onBlurLevelChange = { viewModel.handleIntent(MainIntent.UpdateBlurLevel(it)) },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(WindowInsets.statusBars.asPaddingValues())
+                            modifier = Modifier.fillMaxSize()
                         )
                     } else { // main content
                     // Persistent Box: all screens stay composed, crossfade via alpha.
@@ -277,9 +277,7 @@ fun MainScreen(
                                 selectedDate = state.selectedDate,
                                 recordDates = state.recordDates,
                                 onSelectDate = { viewModel.handleIntent(MainIntent.SelectHistoryDate(it)) },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(WindowInsets.statusBars.asPaddingValues())
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
 
@@ -304,65 +302,68 @@ fun MainScreen(
                                     }
                                 }
                         ) {
-                            val pomodoroAlpha by animateFloatAsState(
-                                targetValue = if (topTab == 1) 1f else 0f,
-                                animationSpec = crossfadeSpec,
-                                label = "pomodoro_fade"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .zIndex(if (topTab == 1) 2f else 0f)
-                                    .alpha(pomodoroAlpha)
-                                    .pointerInput(topTab) {
-                                        if (topTab != 1) {
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val e = awaitPointerEvent(PointerEventPass.Initial)
-                                                    e.changes.forEach { it.consume() }
+                            // Nested crossfade: Today / Pomodoro
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                val pomodoroAlpha by animateFloatAsState(
+                                    targetValue = if (topTab == 1) 1f else 0f,
+                                    animationSpec = crossfadeSpec,
+                                    label = "pomodoro_fade"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .zIndex(if (topTab == 1) 2f else 0f)
+                                        .alpha(pomodoroAlpha)
+                                        .pointerInput(topTab) {
+                                            if (topTab != 1) {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                        e.changes.forEach { it.consume() }
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                            ) {
-                                PomodoroScreen(
-                                    onSaveRecord = { category, minutes ->
-                                        viewModel.handleIntent(MainIntent.SavePomodoroRecord(category, minutes))
-                                    },
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                                ) {
+                                    PomodoroScreen(
+                                        onSaveRecord = { category, minutes ->
+                                            viewModel.handleIntent(MainIntent.SavePomodoroRecord(category, minutes))
+                                        },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
 
-                            val todayTabAlpha by animateFloatAsState(
-                                targetValue = if (topTab == 0) 1f else 0f,
-                                animationSpec = crossfadeSpec,
-                                label = "today_tab_fade"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .zIndex(if (topTab == 0) 2f else 0f)
-                                    .alpha(todayTabAlpha)
-                                    .pointerInput(topTab) {
-                                        if (topTab != 0) {
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val e = awaitPointerEvent(PointerEventPass.Initial)
-                                                    e.changes.forEach { it.consume() }
+                                val todayTabAlpha by animateFloatAsState(
+                                    targetValue = if (topTab == 0) 1f else 0f,
+                                    animationSpec = crossfadeSpec,
+                                    label = "today_tab_fade"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .zIndex(if (topTab == 0) 2f else 0f)
+                                        .alpha(todayTabAlpha)
+                                        .pointerInput(topTab) {
+                                            if (topTab != 0) {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                        e.changes.forEach { it.consume() }
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                            ) {
-                                TodayScreen(
-                                    records = state.todayRecords,
-                                    activeCategory = state.activeCategory,
-                                    timerElapsed = state.timerElapsed,
-                                    onStartTimer = { viewModel.handleIntent(MainIntent.StartTimer(it)) },
-                                    onStopTimer = { viewModel.handleIntent(MainIntent.StopTimer) },
-                                    onSaveSleep = { viewModel.handleIntent(MainIntent.SaveSleep(it)) },
-                                    modifier = Modifier.fillMaxSize()
-                                )
+                                ) {
+                                    TodayScreen(
+                                        records = state.todayRecords,
+                                        activeCategory = state.activeCategory,
+                                        timerElapsed = state.timerElapsed,
+                                        onStartTimer = { viewModel.handleIntent(MainIntent.StartTimer(it)) },
+                                        onStopTimer = { viewModel.handleIntent(MainIntent.StopTimer) },
+                                        onSaveSleep = { viewModel.handleIntent(MainIntent.SaveSleep(it)) },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                             }
                         }
                     }

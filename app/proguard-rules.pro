@@ -28,3 +28,6 @@
 # Kotlin serialization / WebDAV JSON
 -keepattributes *Annotation*
 -keep class com.example.timefriend.data.** { *; }
+
+# Google Tink (used by security-crypto / EncryptedSharedPreferences)
+-dontwarn com.google.errorprone.annotations.**

@@ -59,7 +59,7 @@ fun DayPieChart(
     val slices = TimeCategory.entries.map { cat ->
         val totalMin = records
             .filter { it.category == cat }
-            .sumOf { it.durationMinutes.toLong() }
+            .sumOf { it.durationMinutes }
             .toFloat()
         PieSlice(cat, totalMin, categoryColor(cat))
     }.filter { it.minutes > 0f }
@@ -114,13 +114,13 @@ fun DayPieChart(
                 val h = totalMinutes.toLong() / 60
                 val m = totalMinutes.toLong() % 60
                 Text(
-                    text = "${h}h${m}min",
+                    text = stringResource(R.string.pie_duration_format, h, m),
                     fontSize = 28.sp,
                     color = MiuixTheme.colorScheme.onBackground
                 )
             } else {
                 Text(
-                    text = "0h0min",
+                    text = stringResource(R.string.pie_duration_empty),
                     fontSize = 28.sp,
                     color = MiuixTheme.colorScheme.onBackground.copy(alpha = 0.3f)
                 )
@@ -137,7 +137,7 @@ fun PieChartLegend(
     val slices = TimeCategory.entries.map { cat ->
         val totalMin = records
             .filter { it.category == cat }
-            .sumOf { it.durationMinutes.toLong() }
+            .sumOf { it.durationMinutes }
             .toFloat()
         PieSlice(cat, totalMin, categoryColor(cat))
     }
@@ -149,7 +149,7 @@ fun PieChartLegend(
             LegendItem(
                 color = slice.color,
                 label = stringResource(slice.category.displayNameRes),
-                value = "${h}h${m}min"
+                value = stringResource(R.string.pie_duration_format, h, m)
             )
             Spacer(modifier = Modifier.height(4.dp))
         }

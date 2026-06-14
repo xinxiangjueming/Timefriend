@@ -31,8 +31,8 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a")
-            isUniversalApk = true
+            include("arm64-v8a")
+            isUniversalApk = false
         }
     }
     compileOptions {
@@ -63,6 +63,9 @@ dependencies {
 
     // OkHttp for WebDAV
     implementation(libs.okhttp)
+
+    // Encrypted storage for WebDAV credentials
+    implementation(libs.androidx.security.crypto)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

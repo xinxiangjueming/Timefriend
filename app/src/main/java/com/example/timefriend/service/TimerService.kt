@@ -110,6 +110,7 @@ class TimerService : Service() {
     private fun stopTimer() {
         tickJob?.cancel()
         val cat = activeCategory
+        val tooShort: Boolean
         if (cat != null) {
             val durationMs = System.currentTimeMillis() - startTimeMs
             if (durationMs >= 3 * 60 * 1000L) {
@@ -120,10 +121,17 @@ class TimerService : Service() {
                     date = repo.todayDateString()
                 )
                 scope.launch { repo.saveRecord(record) }
-                broadcastState(tooShort = false)
+                tooShort = false
             } else {
-                broadcastState(tooShort = true)
+                tooShort = true
             }
+        } else {
+            tooShort = false
+        }
+        // Clear state first, then broadcast once with category=null (triggers data reload in ViewModel).
+        // For tooShort, send a separate broadcast before clearing so ViewModel receives the flag.
+        if (tooShort) {
+            broadcastState(tooShort = true)
         }
         activeCategory = null
         startTimeMs = 0L

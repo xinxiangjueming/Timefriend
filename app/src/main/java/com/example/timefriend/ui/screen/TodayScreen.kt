@@ -167,7 +167,7 @@ fun TodayScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             DayPieChart(records = records, size = 220.dp, strokeWidth = 26.dp)
 

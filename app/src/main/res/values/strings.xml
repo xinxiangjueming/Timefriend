@@ -21,6 +21,8 @@
     <!-- Pie chart -->
     <string name="pie_hours_unit">小时</string>
     <string name="pie_hours_format">%.1fh</string>
+    <string name="pie_duration_format">%1$d小时%2$d分钟</string>
+    <string name="pie_duration_empty">0小时0分钟</string>
 
     <!-- Today screen: category buttons -->
     <string name="btn_record">记录</string>
