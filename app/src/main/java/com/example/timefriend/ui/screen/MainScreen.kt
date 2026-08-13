@@ -1,14 +1,18 @@
 package com.example.timefriend.ui.screen
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.input.pointer.pointerInput
@@ -26,6 +30,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,7 +60,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,9 +71,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timefriend.R
 import com.example.timefriend.ui.component.BlurToast
 import com.example.timefriend.ui.theme.GlobalCornerRadius
-import com.example.timefriend.viewmodel.MainEffect
-import com.example.timefriend.viewmodel.MainIntent
+import com.example.timefriend.viewmodel.HistoryViewModel
 import com.example.timefriend.viewmodel.MainViewModel
+import com.example.timefriend.viewmodel.TimerEffect
+import com.example.timefriend.viewmodel.TimerViewModel
+import com.example.timefriend.viewmodel.WebDavViewModel
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDefaults
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
@@ -78,7 +90,10 @@ import top.yukonga.miuix.kmp.blur.textureBlurEffect
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.squircle.squircleBackground
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
@@ -86,9 +101,15 @@ import androidx.compose.material.icons.filled.Settings
 
 @Composable
 fun MainScreen(
-    viewModel: MainViewModel = viewModel()
+    mainViewModel: MainViewModel = viewModel(),
+    timerViewModel: TimerViewModel = viewModel(),
+    historyViewModel: HistoryViewModel = viewModel(),
+    webDavViewModel: WebDavViewModel = viewModel()
 ) {
-    val state by viewModel.state.collectAsState()
+    val mainState by mainViewModel.state.collectAsState()
+    val timerState by timerViewModel.state.collectAsState()
+    val historyState by historyViewModel.state.collectAsState()
+    val webDavState by webDavViewModel.state.collectAsState()
     val backdrop = rememberLayerBackdrop()
     val context = LocalContext.current
     var toastMessage by remember { mutableStateOf<String?>(null) }
@@ -96,13 +117,10 @@ fun MainScreen(
     var settingsScrollingUp by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        viewModel.effect.collect { effect ->
-            when (effect) {
-                is MainEffect.TooShort -> {
-                    toastMessage = null
-                    toastMessage = context.getString(R.string.toast_too_short)
-                }
-                else -> {}
+        timerViewModel.effect.collect { effect ->
+            if (effect is TimerEffect.TooShort) {
+                toastMessage = null
+                toastMessage = context.getString(R.string.toast_too_short)
             }
         }
     }
@@ -131,13 +149,20 @@ fun MainScreen(
                         animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
                     )
                 }
-                val topBarAlpha = if (!state.showSettings && state.currentTab == 0) 1f else 0f
+                // 只在今日页显示；隐藏时 AnimatedVisibility 移除占位，不残留状态栏高度
+                AnimatedVisibility(
+                    visible = !mainState.showSettings && mainState.currentTab == 0,
+                    enter = fadeIn(animationSpec = tween(200)) +
+                        expandVertically(animationSpec = tween(200), expandFrom = Alignment.Top),
+                    exit = fadeOut(animationSpec = tween(200)) +
+                        shrinkVertically(animationSpec = tween(200), shrinkTowards = Alignment.Top),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 8.dp)
-                        .alpha(topBarAlpha),
+                        .padding(top = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
@@ -182,7 +207,8 @@ fun MainScreen(
                         }
                     }
                 }
-            }
+                }
+                }
 
             Scaffold(
                 modifier = Modifier.fillMaxSize().weight(1f),
@@ -190,10 +216,33 @@ fun MainScreen(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { innerPadding ->
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (state.showSettings) {
+                    // 设置页：常驻 AnimatedVisibility，右入右出；zIndex 保证盖住常驻主内容
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = mainState.showSettings,
+                        enter = slideInHorizontally(animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f)) { it },
+                        exit = slideOutHorizontally(animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f)) { it },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MiuixTheme.colorScheme.background)
+                        ) {
                         val pm = context.getSystemService(android.os.PowerManager::class.java)
                         var batteryOptimized by remember { mutableStateOf(false) }
                         var notificationGranted by remember { mutableStateOf(false) }
+                        var accessibilityEnabled by remember { mutableStateOf(false) }
+
+                        fun isAccessibilityServiceEnabled(): Boolean {
+                            val service = context.packageName + "/" + com.example.timefriend.service.AppAccessibilityService::class.java.canonicalName
+                            val enabledServices = android.provider.Settings.Secure.getString(
+                                context.contentResolver,
+                                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                            ) ?: return false
+                            return enabledServices.split(":").any { it.equals(service, ignoreCase = true) }
+                        }
 
                         val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
                         DisposableEffect(lifecycleOwner) {
@@ -203,6 +252,7 @@ fun MainScreen(
                                     notificationGranted = androidx.core.content.ContextCompat.checkSelfPermission(
                                         context, android.Manifest.permission.POST_NOTIFICATIONS
                                     ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    accessibilityEnabled = isAccessibilityServiceEnabled()
                                 }
                             }
                             lifecycleOwner.lifecycle.addObserver(observer)
@@ -214,20 +264,19 @@ fun MainScreen(
                         ) { granted -> notificationGranted = granted }
 
                         SettingsScreen(
-                            server = state.webDavServer,
-                            username = state.webDavUsername,
-                            password = state.webDavPassword,
-                            path = state.webDavPath,
-                            syncStatus = state.syncStatus,
-                            statusMessage = state.syncMessage,
+                            server = webDavState.webDavServer,
+                            username = webDavState.webDavUsername,
+                            password = webDavState.webDavPassword,
+                            syncStatus = webDavState.syncStatus,
+                            statusMessage = webDavState.syncMessage,
                             batteryOptimized = batteryOptimized,
                             notificationGranted = notificationGranted,
-                            onServerChange = { viewModel.handleIntent(MainIntent.UpdateWebDavServer(it)) },
-                            onUsernameChange = { viewModel.handleIntent(MainIntent.UpdateWebDavUsername(it)) },
-                            onPasswordChange = { viewModel.handleIntent(MainIntent.UpdateWebDavPassword(it)) },
-                            onPathChange = { viewModel.handleIntent(MainIntent.UpdateWebDavPath(it)) },
-                            onBackup = { viewModel.handleIntent(MainIntent.WebDavBackup) },
-                            onSync = { viewModel.handleIntent(MainIntent.WebDavSync) },
+                            accessibilityEnabled = accessibilityEnabled,
+                            onServerChange = { webDavViewModel.updateServer(it) },
+                            onUsernameChange = { webDavViewModel.updateUsername(it) },
+                            onPasswordChange = { webDavViewModel.updatePassword(it) },
+                            onBackup = { webDavViewModel.backup() },
+                            onSync = { webDavViewModel.sync() },
                             onRequestBattery = {
                                 val intent = android.content.Intent(
                                     android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
@@ -238,29 +287,76 @@ fun MainScreen(
                             onRequestNotification = {
                                 notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                             },
-                            onBack = { viewModel.handleIntent(MainIntent.HideSettings) },
+                            onRequestAccessibility = {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                context.startActivity(intent)
+                            },
+                            onBack = {
+                                webDavViewModel.saveSettings()
+                                webDavViewModel.resetStatus()
+                                mainViewModel.hideSettings()
+                            },
                             onScrollingUp = { settingsScrollingUp = it },
-                            blurLevel = state.blurLevel,
-                            onBlurLevelChange = { viewModel.handleIntent(MainIntent.UpdateBlurLevel(it)) },
+                            blurLevel = mainState.blurLevel,
+                            onBlurLevelChange = { mainViewModel.updateBlurLevel(it) },
                             modifier = Modifier.fillMaxSize()
                         )
-                    } else { // main content
-                    // Persistent Box: all screens stay composed, crossfade via alpha.
-                    // zIndex ensures the active screen is on top for both drawing and hit testing.
-                    val crossfadeSpec: AnimationSpec<Float> = tween(200)
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        val historyAlpha by animateFloatAsState(
-                            targetValue = if (state.currentTab == 1) 1f else 0f,
-                            animationSpec = crossfadeSpec,
-                            label = "history_fade"
-                        )
+                        }
+                    }
+
+                    // 主内容：常驻组合（不随 showSettings 移除，今日/历史滚动等状态保持）
+                    // settingsAnim: 0f=主内容可见; 1f=设置页打开（左移出屏+淡出+触摸拦截）
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val density = LocalDensity.current
+                        val widthPx = with(density) { maxWidth.toPx() }
+                        val settingsAnim = remember { Animatable(0f) }
+                        LaunchedEffect(mainState.showSettings) {
+                            settingsAnim.animateTo(
+                                if (mainState.showSettings) 1f else 0f,
+                                animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f)
+                            )
+                        }
+                        // 主内容整体容器：平移出屏 + 淡出 + 触摸拦截（设置页 zIndex 1 命中靠前不受影响）
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .zIndex(if (state.currentTab == 1) 2f else 0f)
-                                .alpha(historyAlpha)
-                                .pointerInput(state.currentTab) {
-                                    if (state.currentTab != 1) {
+                                .graphicsLayer {
+                                    translationX = -widthPx * settingsAnim.value
+                                    alpha = 1f - 0.5f * settingsAnim.value
+                                }
+                                .pointerInput(mainState.showSettings) {
+                                    if (mainState.showSettings) {
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                e.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    }
+                                }
+                        ) {
+                        val slideAnim = remember { Animatable(if (mainState.currentTab == 1) 1f else 0f) }
+                        var hasAnimated by remember { mutableStateOf(false) }
+                        LaunchedEffect(mainState.currentTab) {
+                            val target = if (mainState.currentTab == 1) 1f else 0f
+                            if (hasAnimated) {
+                                slideAnim.animateTo(target, animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f))
+                            } else {
+                                slideAnim.snapTo(target)
+                                hasAnimated = true
+                            }
+                        }
+                        // —— 历史页：从右滑入 / 向右滑出 ——
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(if (mainState.currentTab == 1) 2f else 0f)
+                                .graphicsLayer {
+                                    translationX = widthPx * (1f - slideAnim.value)
+                                    alpha = 0.35f + 0.65f * slideAnim.value
+                                }
+                                .pointerInput(mainState.currentTab) {
+                                    if (mainState.currentTab != 1) {
                                         awaitPointerEventScope {
                                             while (true) {
                                                 val e = awaitPointerEvent(PointerEventPass.Initial)
@@ -271,28 +367,27 @@ fun MainScreen(
                                 }
                         ) {
                             HistoryScreen(
-                                records = state.historyRecords,
-                                weekRecords = state.weekRecords,
-                                monthRecords = state.monthRecords,
-                                selectedDate = state.selectedDate,
-                                recordDates = state.recordDates,
-                                onSelectDate = { viewModel.handleIntent(MainIntent.SelectHistoryDate(it)) },
+                                records = historyState.historyRecords,
+                                weekRecords = historyState.weekRecords,
+                                monthRecords = historyState.monthRecords,
+                                selectedDate = historyState.selectedDate,
+                                recordDates = historyState.recordDates,
+                                onSelectDate = { historyViewModel.selectDate(it) },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
 
-                        val todayAlpha by animateFloatAsState(
-                            targetValue = if (state.currentTab == 0) 1f else 0f,
-                            animationSpec = crossfadeSpec,
-                            label = "today_fade"
-                        )
+                        // —— 今日页：向左滑出 / 从左滑入（含内部 今日/专注 交叉淡化）——
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .zIndex(if (state.currentTab == 0) 2f else 0f)
-                                .alpha(todayAlpha)
-                                .pointerInput(state.currentTab) {
-                                    if (state.currentTab != 0) {
+                                .zIndex(if (mainState.currentTab == 0) 2f else 0f)
+                                .graphicsLayer {
+                                    translationX = -widthPx * slideAnim.value
+                                    alpha = 1f - 0.65f * slideAnim.value
+                                }
+                                .pointerInput(mainState.currentTab) {
+                                    if (mainState.currentTab != 0) {
                                         awaitPointerEventScope {
                                             while (true) {
                                                 val e = awaitPointerEvent(PointerEventPass.Initial)
@@ -306,7 +401,7 @@ fun MainScreen(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 val pomodoroAlpha by animateFloatAsState(
                                     targetValue = if (topTab == 1) 1f else 0f,
-                                    animationSpec = crossfadeSpec,
+                                    animationSpec = tween(200),
                                     label = "pomodoro_fade"
                                 )
                                 Box(
@@ -327,7 +422,7 @@ fun MainScreen(
                                 ) {
                                     PomodoroScreen(
                                         onSaveRecord = { category, minutes ->
-                                            viewModel.handleIntent(MainIntent.SavePomodoroRecord(category, minutes))
+                                            timerViewModel.savePomodoroRecord(category, minutes)
                                         },
                                         modifier = Modifier.fillMaxSize()
                                     )
@@ -335,7 +430,7 @@ fun MainScreen(
 
                                 val todayTabAlpha by animateFloatAsState(
                                     targetValue = if (topTab == 0) 1f else 0f,
-                                    animationSpec = crossfadeSpec,
+                                    animationSpec = tween(200),
                                     label = "today_tab_fade"
                                 )
                                 Box(
@@ -355,19 +450,19 @@ fun MainScreen(
                                         }
                                 ) {
                                     TodayScreen(
-                                        records = state.todayRecords,
-                                        activeCategory = state.activeCategory,
-                                        timerElapsed = state.timerElapsed,
-                                        onStartTimer = { viewModel.handleIntent(MainIntent.StartTimer(it)) },
-                                        onStopTimer = { viewModel.handleIntent(MainIntent.StopTimer) },
-                                        onSaveSleep = { viewModel.handleIntent(MainIntent.SaveSleep(it)) },
+                                        records = timerState.todayRecords,
+                                        activeCategory = timerState.activeCategory,
+                                        timerElapsed = timerState.timerElapsed,
+                                        onStartTimer = { timerViewModel.startTimer(it) },
+                                        onStopTimer = { timerViewModel.stopTimer() },
+                                        onSaveSleep = { timerViewModel.saveSleep(it) },
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
                             }
                         }
-                    }
-                    } // else (normal content)
+                        } // 闭合主内容容器 Box
+                    } // 闭合 BoxWithConstraints
                 } // Box (settings_switch)
             }
         }
@@ -389,7 +484,27 @@ fun MainScreen(
         }
 
         // Layer 4: floating nav bar with blur + settings
-        val showBottomBar = !state.showSettings || !settingsScrollingUp
+        val showBottomBar = !mainState.showSettings || !settingsScrollingUp
+
+        // Debug: log navigation bar insets
+        val density = LocalDensity.current
+        val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
+        val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
+        val navBarsBottomDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
+        val systemBarsBottomDp = with(density) { WindowInsets.systemBars.getBottom(this).toDp() }
+        val safeDrawingBottomDp = with(density) { WindowInsets.safeDrawing.getBottom(this).toDp() }
+        val imeBottomDp = with(density) { WindowInsets.ime.getBottom(this).toDp() }
+        val cutoutTopDp = with(density) { WindowInsets.displayCutout.getTop(this).toDp() }
+        LaunchedEffect(Unit) {
+            Log.d("NavBarDebug", "screen=${screenWidthDp}x${screenHeightDp}")
+            Log.d("NavBarDebug", "API=${android.os.Build.VERSION.SDK_INT}")
+            Log.d("NavBarDebug", "navigationBars.bottom=$navBarsBottomDp")
+            Log.d("NavBarDebug", "systemBars.bottom=$systemBarsBottomDp")
+            Log.d("NavBarDebug", "safeDrawing.bottom=$safeDrawingBottomDp")
+            Log.d("NavBarDebug", "ime.bottom=$imeBottomDp")
+            Log.d("NavBarDebug", "cutout.top=$cutoutTopDp")
+            Log.d("NavBarDebug", "bar hardcoded bottom padding=22dp, bar height=64dp")
+        }
         androidx.compose.animation.AnimatedVisibility(
             visible = showBottomBar,
             enter = androidx.compose.animation.slideInVertically(tween(200)) { it },
@@ -402,8 +517,8 @@ fun MainScreen(
         ) {
             val navBarShape = RoundedCornerShape(50.dp)
             val selectedIndex = when {
-                state.showSettings -> 2
-                state.currentTab == 1 -> 1
+                mainState.showSettings -> 2
+                mainState.currentTab == 1 -> 1
                 else -> 0
             }
             val navItems = listOf(
@@ -426,14 +541,14 @@ fun MainScreen(
             Box(
                 modifier = Modifier
                     .padding(horizontal = FloatingNavigationBarDefaults.HorizontalOutSidePadding)
-                    .padding(bottom = 22.dp)
+                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 8.dp)
                     .drawBackdrop(
                         backdrop = backdrop,
                         shape = { navBarShape },
                         effects = {
                             textureBlurEffect(
-                                blurRadiusX = state.blurLevel,
-                                blurRadiusY = state.blurLevel
+                                blurRadiusX = mainState.blurLevel,
+                                blurRadiusY = mainState.blurLevel
                             )
                         }
                     )
@@ -463,18 +578,49 @@ fun MainScreen(
                 Row(modifier = Modifier.fillMaxSize()) {
                     navItems.forEachIndexed { _, (icon, label, index) ->
                         val isSelected = index == selectedIndex
+                        val interactionSource = remember { MutableInteractionSource() }
+                        val isPressed by interactionSource.collectIsPressedAsState()
+                        val itemAlpha by animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0.4f,
+                            animationSpec = tween(200),
+                            label = "nav_item_alpha"
+                        )
+                        val pressedScale by animateFloatAsState(
+                            targetValue = if (isPressed) 0.88f else 1f,
+                            animationSpec = tween(150),
+                            label = "nav_item_press"
+                        )
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
+                                .graphicsLayer {
+                                    scaleX = pressedScale
+                                    scaleY = pressedScale
+                                }
                                 .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    interactionSource = interactionSource,
                                     indication = null
                                 ) {
                                     when (index) {
-                                        0 -> viewModel.handleIntent(MainIntent.SwitchTab(0))
-                                        1 -> viewModel.handleIntent(MainIntent.SwitchTab(1))
-                                        2 -> viewModel.handleIntent(MainIntent.ShowSettings)
+                                        0 -> {
+                                            if (mainState.showSettings) {
+                                                webDavViewModel.saveSettings()
+                                                webDavViewModel.resetStatus()
+                                            }
+                                            mainViewModel.switchTab(0)
+                                        }
+                                        1 -> {
+                                            if (mainState.showSettings) {
+                                                webDavViewModel.saveSettings()
+                                                webDavViewModel.resetStatus()
+                                            }
+                                            mainViewModel.switchTab(1)
+                                        }
+                                        2 -> {
+                                            webDavViewModel.loadSettings()
+                                            mainViewModel.showSettings()
+                                        }
                                     }
                                 },
                             contentAlignment = Alignment.Center
@@ -484,17 +630,13 @@ fun MainScreen(
                                     imageVector = icon,
                                     contentDescription = label,
                                     modifier = Modifier.size(22.dp),
-                                    tint = MiuixTheme.colorScheme.onSurfaceContainer.copy(
-                                        alpha = if (isSelected) 1f else 0.4f
-                                    )
+                                    tint = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = itemAlpha)
                                 )
                                 Text(
                                     text = label,
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = MiuixTheme.colorScheme.onSurfaceContainer.copy(
-                                        alpha = if (isSelected) 1f else 0.4f
-                                    )
+                                    color = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = itemAlpha)
                                 )
                             }
                         }
@@ -505,4 +647,3 @@ fun MainScreen(
         } // AnimatedVisibility
     }
 }
-

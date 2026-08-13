@@ -66,3 +66,9 @@ crashlytics-build.properties
 # Misc
 /captures
 *.hprof
+
+# WorkBuddy workspace metadata (private)
+.workbuddy/
+
+# Release build output
+app/release/

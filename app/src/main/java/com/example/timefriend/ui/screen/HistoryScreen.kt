@@ -1,6 +1,14 @@
 package com.example.timefriend.ui.screen
 
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +44,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.timefriend.R
@@ -185,7 +198,9 @@ fun HistoryScreen(
         Row(
             modifier = modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                // 横屏:左侧避状态栏条、右侧避手势导航条(挖孔/侧边手势条均含于 safeDrawing)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp)
         ) {
             Card(
                 cornerRadius = GlobalCornerRadius,
@@ -213,7 +228,7 @@ fun HistoryScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(start = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Top
             ) {
                 pieContent()
             }
@@ -222,10 +237,10 @@ fun HistoryScreen(
         Column(
             modifier = modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                // 竖屏:顶部避状态栏(顶栏隐藏时防止内容被遮挡),左右挖孔由 safeDrawing.Horizontal 兼容
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
             Card(
                 cornerRadius = GlobalCornerRadius,
                 colors = CardDefaults.defaultColors()
@@ -255,11 +270,6 @@ private fun CalendarView(
 
     var baseDate by remember { mutableStateOf(Calendar.getInstance()) }
 
-    val cal = baseDate.clone() as Calendar
-    cal.set(Calendar.DAY_OF_MONTH, 1)
-    val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
-    val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-
     val today = dateFormat.format(java.util.Date())
     val weekdays = stringArrayResource(R.array.weekday_headers)
 
@@ -282,11 +292,6 @@ private fun CalendarView(
                 color = MiuixTheme.colorScheme.onSurface
             )
             Text(
-                text = monthFormat.format(baseDate.time),
-                fontSize = 18.sp,
-                color = MiuixTheme.colorScheme.onSurface
-            )
-            Text(
                 text = stringResource(R.string.calendar_next_month),
                 modifier = Modifier
                     .clip(CircleShape)
@@ -302,43 +307,91 @@ private fun CalendarView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Row(modifier = Modifier.fillMaxWidth()) {
-            weekdays.forEach { day ->
-                Text(
-                    text = day,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        val totalCells = firstDayOfWeek - 1 + daysInMonth
-        val rows = (totalCells + 6) / 7
-
-        for (row in 0 until rows) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                for (col in 0..6) {
-                    val index = row * 7 + col
-                    val dayNum = index - (firstDayOfWeek - 1) + 1
-
-                    if (dayNum in 1..daysInMonth) {
-                        cal.set(Calendar.DAY_OF_MONTH, dayNum)
-                        val dateStr = dateFormat.format(cal.time)
-
-                        DayCell(
-                            day = dayNum,
-                            isToday = dateStr == today,
-                            isSelected = dateStr == selectedDate,
-                            hasData = dateStr in recordDates,
-                            onClick = { onSelectDate(dateStr) },
-                            modifier = Modifier.weight(1f)
-                        )
+        // 月份标题 + 星期行 + 日期网格：作为一个整体做 左右滑动 + 淡入淡出
+        AnimatedContent(
+            targetState = baseDate,
+            modifier = Modifier.fillMaxWidth(),
+            transitionSpec = {
+                val fromMonth =
+                    initialState.get(Calendar.YEAR) * 12 + initialState.get(Calendar.MONTH)
+                val toMonth =
+                    targetState.get(Calendar.YEAR) * 12 + targetState.get(Calendar.MONTH)
+                val contentTransform =
+                    if (toMonth > fromMonth) {
+                        // 切到下月：旧内容向右滑出，新内容从左侧滑入
+                        (slideInHorizontally(animationSpec = tween(250)) { -it } +
+                            fadeIn(animationSpec = tween(250)))
+                            .togetherWith(
+                                slideOutHorizontally(animationSpec = tween(250)) { it } +
+                                    fadeOut(animationSpec = tween(250))
+                            )
                     } else {
-                        Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
+                        // 切到上月：旧内容向左滑出，新内容从右侧滑入
+                        (slideInHorizontally(animationSpec = tween(250)) { it } +
+                            fadeIn(animationSpec = tween(250)))
+                            .togetherWith(
+                                slideOutHorizontally(animationSpec = tween(250)) { -it } +
+                                    fadeOut(animationSpec = tween(250))
+                            )
+                    }
+                contentTransform.using(SizeTransform(clip = false) { _, _ -> tween(250) })
+            },
+            label = "calendar_month_switch"
+        ) { targetDate ->
+            // 关键：必须使用 targetDate（各内容自己的月份），不要读外部 baseDate
+            val cal = targetDate.clone() as Calendar
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+            val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+            Column {
+                Text(
+                    text = monthFormat.format(targetDate.time),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontSize = 18.sp,
+                    color = MiuixTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    weekdays.forEach { day ->
+                        Text(
+                            text = day,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val totalCells = firstDayOfWeek - 1 + daysInMonth
+                val rows = (totalCells + 6) / 7
+
+                for (row in 0 until rows) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        for (col in 0..6) {
+                            val index = row * 7 + col
+                            val dayNum = index - (firstDayOfWeek - 1) + 1
+                            if (dayNum in 1..daysInMonth) {
+                                cal.set(Calendar.DAY_OF_MONTH, dayNum)
+                                val dateStr = dateFormat.format(cal.time)
+                                DayCell(
+                                    day = dayNum,
+                                    isToday = dateStr == today,
+                                    isSelected = dateStr == selectedDate,
+                                    hasData = dateStr in recordDates,
+                                    onClick = { onSelectDate(dateStr) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
+                            }
+                        }
                     }
                 }
             }

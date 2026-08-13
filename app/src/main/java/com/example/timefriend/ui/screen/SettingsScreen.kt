@@ -9,10 +9,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -20,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,21 +54,21 @@ fun SettingsScreen(
     server: String,
     username: String,
     password: String,
-    path: String,
     syncStatus: SyncStatus,
     statusMessage: String?,
     blurLevel: Float,
     onBlurLevelChange: (Float) -> Unit,
     batteryOptimized: Boolean,
     notificationGranted: Boolean,
+    accessibilityEnabled: Boolean,
     onServerChange: (String) -> Unit,
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
-    onPathChange: (String) -> Unit,
     onBackup: () -> Unit,
     onSync: () -> Unit,
     onRequestBattery: () -> Unit,
     onRequestNotification: () -> Unit,
+    onRequestAccessibility: () -> Unit,
     onBack: () -> Unit,
     onScrollingUp: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -78,13 +84,24 @@ fun SettingsScreen(
         else -> MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.6f)
     }
 
+    val scrollState = rememberScrollState()
+
+    // 恢复底栏：手指离开屏幕 或 内容不再超出屏幕
+    LaunchedEffect(scrollState.isScrollInProgress, scrollState.maxValue) {
+        if (!scrollState.isScrollInProgress) {
+            onScrollingUp(false)
+        } else if (scrollState.maxValue <= 0 || scrollState.value >= scrollState.maxValue) {
+            onScrollingUp(false)
+        }
+    }
+
     val nestedScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                // available.y < 0 → scrolling up (finger moves up) → hide bottom bar
-                // available.y > 0 → scrolling down (finger moves down) → show bottom bar
-                if (available.y < -5) onScrollingUp(true)
-                else if (available.y > 5) onScrollingUp(false)
+                // 手指向下滑（delta > 10px）→ 隐藏底栏
+                // 手指向上滑（delta < -10px）→ 显示底栏
+                if (available.y > 10) onScrollingUp(true)
+                else if (available.y < -10) onScrollingUp(false)
                 return androidx.compose.ui.geometry.Offset.Zero
             }
         }
@@ -94,11 +111,12 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .nestedScroll(nestedScrollConnection)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .verticalScroll(scrollState)
+            // 顶部避状态栏(顶栏在设置页隐藏,防止第一张卡片被遮挡);
+            // 横屏时左避状态栏条、右避手势条;置于 scroll 之内 → 滚动时可侵入系统栏区域,保持沉浸语义
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-
         // WebDAV section
         Card(
             cornerRadius = GlobalCornerRadius,
@@ -176,14 +194,11 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Remote path
-                FieldLabel(stringResource(R.string.webdav_path))
-                Spacer(modifier = Modifier.height(6.dp))
-                SettingsTextField(
-                    value = path,
-                    onValueChange = onPathChange,
-                    hint = stringResource(R.string.webdav_path_hint),
-                    enabled = !isLoading
+                // 自动备份目录提示
+                Text(
+                    text = stringResource(R.string.webdav_auto_dir),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -307,6 +322,16 @@ fun SettingsScreen(
                             description = stringResource(R.string.perm_notification_desc),
                             granted = notificationGranted,
                             onClick = onRequestNotification
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Accessibility
+                        PermissionItem(
+                            title = stringResource(R.string.perm_accessibility),
+                            description = stringResource(R.string.perm_accessibility_desc),
+                            granted = accessibilityEnabled,
+                            onClick = onRequestAccessibility
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))

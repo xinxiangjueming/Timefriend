@@ -17,6 +17,7 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.example.timefriend.MainActivity
 import com.example.timefriend.R
+import com.example.timefriend.TimeFriendApp
 import com.example.timefriend.data.TimeCategory
 import com.example.timefriend.data.TimeRecord
 import com.example.timefriend.data.TimeRepository
@@ -63,7 +64,7 @@ class TimerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        repo = TimeRepository(application)
+        repo = (application as TimeFriendApp).container.repository
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
 
@@ -83,7 +84,9 @@ class TimerService : Service() {
             }
             ACTION_STOP -> stopTimer()
         }
-        return START_STICKY
+        // NOT sticky: the service is only alive while a timer is running; do not
+        // resurrect it pointlessly after the process is killed.
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -111,25 +114,26 @@ class TimerService : Service() {
         tickJob?.cancel()
         val cat = activeCategory
         val tooShort: Boolean
-        if (cat != null) {
+        val recordToSave: TimeRecord? = if (cat != null) {
             val durationMs = System.currentTimeMillis() - startTimeMs
             if (durationMs >= 3 * 60 * 1000L) {
-                val record = TimeRecord(
+                tooShort = false
+                TimeRecord(
                     category = cat,
                     startTime = startTimeMs,
                     endTime = startTimeMs + durationMs,
                     date = repo.todayDateString()
                 )
-                scope.launch { repo.saveRecord(record) }
-                tooShort = false
             } else {
                 tooShort = true
+                null
             }
         } else {
             tooShort = false
+            null
         }
-        // Clear state first, then broadcast once with category=null (triggers data reload in ViewModel).
-        // For tooShort, send a separate broadcast before clearing so ViewModel receives the flag.
+        // Send tooShort first, then clear state and broadcast category=null
+        // (triggers UI cleanup in the ViewModel).
         if (tooShort) {
             broadcastState(tooShort = true)
         }
@@ -137,7 +141,23 @@ class TimerService : Service() {
         startTimeMs = 0L
         elapsedMs = 0L
         broadcastState()
-        updateNotification()
+
+        // Exit the foreground service. stopSelf() must run only after
+        // repo.saveRecord() completes (finally), otherwise onDestroy's
+        // scope.cancel() could abort the pending database write.
+        if (recordToSave != null) {
+            scope.launch {
+                try {
+                    repo.saveRecord(recordToSave)
+                } finally {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
+        } else {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 
     private fun startTicking() {
@@ -208,7 +228,7 @@ class TimerService : Service() {
 
             // Stop action button
             val stopIntent = Intent(this, TimerService::class.java).apply { action = ACTION_STOP }
-            val stopPi = PendingIntent.getService(
+            val stopPi = PendingIntent.getForegroundService(
                 this, 200, stopIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -221,7 +241,7 @@ class TimerService : Service() {
             TimeCategory.entries
                 .filter { it != TimeCategory.SLEEP }
                 .forEach { category ->
-                    val pi = PendingIntent.getService(
+                    val pi = PendingIntent.getForegroundService(
                         this, category.ordinal + 100,
                         Intent(this, TimerService::class.java).apply {
                             action = ACTION_START

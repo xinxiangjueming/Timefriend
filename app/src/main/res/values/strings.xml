@@ -80,8 +80,7 @@
     <string name="webdav_server_hint">https://example.com/dav/</string>
     <string name="webdav_username">用户名</string>
     <string name="webdav_password">密码</string>
-    <string name="webdav_path">备份路径</string>
-    <string name="webdav_path_hint">timefriend_backup.json</string>
+    <string name="webdav_auto_dir">备份将自动保存到云端 Timefriend 目录</string>
     <string name="webdav_backup">备份</string>
     <string name="webdav_sync">同步</string>
     <string name="webdav_saving">保存配置…</string>
@@ -91,6 +90,9 @@
     <string name="webdav_sync_success">同步成功</string>
     <string name="webdav_error_empty">请填写完整信息</string>
     <string name="webdav_error_network">网络错误：%s</string>
+    <string name="webdav_error_mkcol">无法在云端创建 Timefriend 目录：%s</string>
+    <string name="webdav_error_upload">上传备份失败：%s</string>
+    <string name="webdav_error_auth">WebDAV 认证失败，请检查用户名或密码</string>
 
     <!-- Permissions -->
     <string name="permissions_title">权限管理</string>
@@ -98,6 +100,9 @@
     <string name="perm_battery_desc">允许后台运行，番茄钟倒计时不会被系统杀掉</string>
     <string name="perm_notification">通知权限</string>
     <string name="perm_notification_desc">允许发送通知，番茄钟后台运行时显示倒计时</string>
+    <string name="perm_accessibility">无障碍服务</string>
+    <string name="perm_accessibility_desc">提升进程优先级，防止后台被系统回收</string>
+    <string name="accessibility_service_desc">用于保持应用在后台运行，防止被系统回收</string>
     <string name="perm_tip">请保证软件处于后台锁定状态</string>
     <string name="perm_granted">已授权</string>
     <string name="perm_not_granted">未授权</string>
