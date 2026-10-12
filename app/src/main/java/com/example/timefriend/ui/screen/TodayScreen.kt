@@ -19,10 +19,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -52,17 +49,9 @@ fun TodayScreen(
     onStartTimer: (TimeCategory) -> Unit,
     onStopTimer: () -> Unit,
     onSaveSleep: (Int) -> Unit,
+    onShowSleep: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showSleepDialog by remember { mutableStateOf(false) }
-
-    if (showSleepDialog) {
-        SleepInputDialog(
-            onDismiss = { showSleepDialog = false },
-            onSave = { minutes -> onSaveSleep(minutes) }
-        )
-    }
-
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     if (isLandscape) {
@@ -123,7 +112,7 @@ fun TodayScreen(
                                 isActive = activeCategory == category,
                                 onClick = {
                                     if (category == TimeCategory.SLEEP) {
-                                        showSleepDialog = true
+                                        onShowSleep()
                                     } else if (activeCategory == category) {
                                         onStopTimer()
                                     } else if (activeCategory == null) {
@@ -202,7 +191,7 @@ fun TodayScreen(
                         isActive = activeCategory == category,
                         onClick = {
                             if (category == TimeCategory.SLEEP) {
-                                showSleepDialog = true
+                                onShowSleep()
                             } else if (activeCategory == category) {
                                 onStopTimer()
                             } else if (activeCategory == null) {

@@ -74,7 +74,7 @@ class WebDavHelper(
                     if (!probeExists(url)) {
                         throw WebDavException(
                             WebDavErrorKind.MKCOL,
-                            "无法在服务器上创建目录 $url，父级目录不存在或服务器地址配置有误"
+                            "Cannot create directory $url on server: parent directory missing or server address invalid"
                         )
                     }
                 }

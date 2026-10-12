@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">Timefriend</string>
+
+    <!-- Top bar -->
+    <string name="top_today">Today</string>
+    <string name="top_pomodoro">Pomodoro</string>
+    <string name="top_settings">Settings</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_today">Today</string>
+    <string name="nav_history">History</string>
+
+    <!-- Time categories -->
+    <string name="category_sleep">Sleep</string>
+    <string name="category_waste">Wasted</string>
+    <string name="category_fixed">Fixed</string>
+    <string name="category_investment">Investment</string>
+
+    <!-- Pie chart -->
+    <string name="pie_hours_unit">h</string>
+    <string name="pie_hours_format">%.1fh</string>
+    <string name="pie_duration_format">%1$dh %2$dm</string>
+    <string name="pie_duration_empty">0h 0m</string>
+
+    <!-- Today screen: category buttons -->
+    <string name="btn_record">Record</string>
+    <string name="btn_tap_to_start">Tap to Start</string>
+    <string name="btn_tap_to_stop">Tap to Stop</string>
+
+    <!-- Duration display -->
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_minutes">%dm</string>
+
+    <!-- Sleep input dialog -->
+    <string name="sleep_dialog_title">Log Sleep</string>
+    <string name="sleep_label_hours">Hours</string>
+    <string name="sleep_label_minutes">Minutes</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_confirm">OK</string>
+    <string name="month_year_picker_title">Select year and month</string>
+
+    <!-- Toast messages -->
+    <string name="toast_too_short">Too Short</string>
+
+    <!-- History screen -->
+    <string name="history_no_records">No records for this date</string>
+    <string name="history_no_records_today">No records today</string>
+    <string name="history_no_records_week">No records this week</string>
+    <string name="history_no_records_month">No records this month</string>
+    <string name="history_day_total">Daily Total</string>
+    <string name="history_week_total">Weekly Total</string>
+    <string name="history_month_total">Monthly Total</string>
+        <string name="calendar_prev_month">◀</string>
+    <string name="calendar_next_month">▶</string>
+    <string name="calendar_day_mode">Day</string>
+    <string name="calendar_month_mode">Month</string>
+    <string name="calendar_week_mode">Week</string>
+
+    <!-- Pomodoro -->
+    <string name="pomodoro_focus">Focus</string>
+    <string name="pomodoro_rest">Break</string>
+    <string name="pomodoro_custom">Custom</string>
+    <string name="pomodoro_custom_title">Set Duration</string>
+    <string name="pomodoro_start">Start</string>
+    <string name="pomodoro_pause">Pause</string>
+    <string name="pomodoro_resume">Resume</string>
+    <string name="pomodoro_stop">Stop</string>
+    <string name="pomodoro_focus_phase">Focusing</string>
+    <string name="pomodoro_rest_phase">On Break</string>
+    <string name="pomodoro_done">Done!</string>
+    <string name="pomodoro_minutes_format">%d min</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="webdav_title">WebDAV Backup</string>
+    <string name="webdav_server">Server</string>
+    <string name="webdav_server_hint">https://example.com/dav/</string>
+    <string name="webdav_username">Username</string>
+    <string name="webdav_password">Password</string>
+    <string name="webdav_auto_dir">Backups are saved to the Timefriend folder in your cloud</string>
+    <string name="webdav_backup">Backup</string>
+    <string name="webdav_sync">Sync</string>
+    <string name="webdav_saving">Saving…</string>
+    <string name="webdav_backing_up">Backing up…</string>
+    <string name="webdav_syncing">Syncing…</string>
+    <string name="webdav_backup_success">Backup Complete</string>
+    <string name="webdav_sync_success">Sync Complete</string>
+    <string name="webdav_error_empty">Please fill in all fields</string>
+    <string name="webdav_error_network">Network error: %s</string>
+    <string name="webdav_error_mkcol">Could not create the Timefriend folder: %s</string>
+    <string name="webdav_error_upload">Upload failed: %s</string>
+    <string name="webdav_error_auth">Authentication failed. Check your username and password.</string>
+
+    <!-- Permissions -->
+    <string name="permissions_title">Permissions</string>
+    <string name="perm_battery">Unrestricted Battery</string>
+    <string name="perm_battery_desc">Lets the app run in the background so the timer isn\'t killed</string>
+    <string name="perm_notification">Notifications</string>
+    <string name="perm_notification_desc">Shows the countdown while the timer runs in the background</string>
+    <string name="perm_accessibility">Accessibility</string>
+    <string name="perm_accessibility_desc">Raises the app\'s priority to keep it from being closed</string>
+    <string name="accessibility_service_desc">Keeps the app running in the background</string>
+    <string name="perm_tip">Keep the app locked in the background</string>
+    <string name="perm_granted">Granted</string>
+    <string name="perm_not_granted">Not Granted</string>
+    <string name="perm_grant_button">Grant</string>
+
+    <!-- Pomodoro notification -->
+    <string name="pomodoro_channel_name">Pomodoro</string>
+    <string name="pomodoro_channel_desc">Pomodoro countdown notifications</string>
+    <string name="pomodoro_notif_focus">Pomodoro</string>
+    <string name="pomodoro_notif_rest">Break</string>
+    <string name="pomodoro_notif_stop">Stop</string>
+    <string name="pomodoro_notif_paused">Paused</string>
+    <string name="pomodoro_notif_running">Running</string>
+
+    <!-- Timer notification -->
+    <string name="timer_channel_name">Timer</string>
+    <string name="timer_channel_desc">Time tracking notifications</string>
+    <string name="timer_notif_idle_title">Tap to Start</string>
+    <string name="timer_notif_tap_start">Tap the button below to start</string>
+    <string name="timer_notif_timing">Tracking</string>
+    <string name="timer_notif_stop">Stop</string>
+
+    <!-- Settings -->
+    <string name="settings_blur_title">Overlay Blur</string>
+    <string name="settings_blur_level">Blur: %d</string>
+
+    <!-- WebDAV extra -->
+    <string name="webdav_no_backup">No backup found in the cloud</string>
+
+    <!-- Calendar weekday headers (Sunday-first) -->
+    <string-array name="weekday_short">
+        <item>S</item>
+        <item>M</item>
+        <item>T</item>
+        <item>W</item>
+        <item>T</item>
+        <item>F</item>
+        <item>S</item>
+    </string-array>
+
+</resources>

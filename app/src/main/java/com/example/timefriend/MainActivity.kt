@@ -59,14 +59,15 @@ class MainActivity : ComponentActivity() {
         // configChanges 声明了 orientation|screenSize 等,旋转不重建 Activity,
         // 只回调本方法;若不在此重设,系统会按主题/默认值重放窗口属性(如导航栏颜色),
         // 小白条退回不透明白底。
-        val light = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) !=
-            Configuration.UI_MODE_NIGHT_YES
-        NavigationBarHelper.setupEdgeToEdge(this, lightStatusBar = light)
+        // 图标明暗传 null(不干预):深浅切换由 ThemeTransition 圆孔揭露动画延迟呈现,
+        // 状态栏/导航栏图标明暗由 TimefriendTheme 的 SideEffect 以「已生效深浅」
+        // (appliedDark)统一驱动,与界面动画同步;此处若按系统真值立即设置会先于动画翻转。
+        NavigationBarHelper.setupEdgeToEdge(this, lightStatusBar = null)
         // 系统可能在配置变更后按主题重放窗口属性(如导航栏颜色),
         // 延迟一帧再设一次,确保重放之后仍是透明导航栏。
         window.decorView.post {
             if (isFinishing || isDestroyed) return@post
-            NavigationBarHelper.setupEdgeToEdge(this, lightStatusBar = light)
+            NavigationBarHelper.setupEdgeToEdge(this, lightStatusBar = null)
         }
         // 注意:不能调 recreate()(会丢输入/滚动状态并闪烁);
         // Compose 通过 LocalConfiguration / WindowInsets 自动响应旋转。

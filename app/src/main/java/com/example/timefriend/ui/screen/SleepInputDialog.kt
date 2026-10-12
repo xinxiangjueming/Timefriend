@@ -1,5 +1,6 @@
 package com.example.timefriend.ui.screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,14 +19,25 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.timefriend.R
-import com.example.timefriend.ui.theme.GlobalCornerRadius
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
+import com.example.timefriend.ui.component.BlurredDialogScaffold
+import com.example.timefriend.ui.component.DialogButtonRow
+import com.example.timefriend.ui.component.DialogCancelButton
+import com.example.timefriend.ui.component.DialogConfirmButton
+import com.example.timefriend.ui.component.DialogOverlay
+import com.example.timefriend.ui.component.NumberStepper
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
+/**
+ * 睡眠输入弹窗（对齐 SportLink 定稿：外部 Haze scrim + 内部 miuix 玻璃卡）。
+ *
+ * 经 [DialogOverlay] 注册到宿主 slot（MainScreen Layer 6），与采样源同窗口兄弟：
+ * - 外部 scrim：Haze 20dp 模糊 + 25% 压暗。
+ * - 卡片：miuix textureBlur 10f + 高光描边 + tint 0.55 + 1dp 描边。
+ * - 宽度由 BlurredDialogScaffold 内部 dialogWidthAdaptive 统一（横屏 60%/竖屏 90% 屏宽，
+ *   对齐 SportLink dialogWidthAdaptive）。
+ * - 点击外部关闭、返回键关闭由 scaffold / BackHandler 承担。
+ */
 @Composable
 fun SleepInputDialog(
     onDismiss: () -> Unit,
@@ -34,11 +46,9 @@ fun SleepInputDialog(
     var hours by remember { mutableIntStateOf(8) }
     var minutes by remember { mutableIntStateOf(0) }
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Card(
-            cornerRadius = GlobalCornerRadius,
-            colors = CardDefaults.defaultColors()
-        ) {
+    DialogOverlay {
+        BackHandler { onDismiss() }
+        BlurredDialogScaffold(onDismissRequest = onDismiss) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -77,54 +87,24 @@ fun SleepInputDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        text = stringResource(R.string.action_cancel),
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.textButtonColors(
-                            textColor = MiuixTheme.colorScheme.onSurfaceContainerVariant
+                DialogButtonRow(
+                    cancel = {
+                        DialogCancelButton(
+                            text = stringResource(R.string.action_cancel),
+                            onClick = onDismiss
                         )
-                    )
-                    TextButton(
-                        text = stringResource(R.string.action_save),
-                        onClick = {
-                            onSave(hours * 60 + minutes)
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.textButtonColorsPrimary()
-                    )
-                }
+                    },
+                    confirm = {
+                        DialogConfirmButton(
+                            text = stringResource(R.string.action_save),
+                            onClick = {
+                                onSave(hours * 60 + minutes)
+                                onDismiss()
+                            }
+                        )
+                    }
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun NumberStepper(
-    value: Int,
-    range: IntRange,
-    onValueChange: (Int) -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        TextButton(
-            text = "▲",
-            onClick = { if (value < range.last) onValueChange(value + 1) },
-            colors = ButtonDefaults.textButtonColorsPrimary()
-        )
-
-        Text(
-            text = String.format("%02d", value),
-            fontSize = 36.sp,
-            color = MiuixTheme.colorScheme.onSurface
-        )
-
-        TextButton(
-            text = "▼",
-            onClick = { if (value > range.first) onValueChange(value - 1) },
-            colors = ButtonDefaults.textButtonColorsPrimary()
-        )
     }
 }

@@ -2,6 +2,8 @@ package com.example.timefriend.ui.screen
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -11,6 +13,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,8 +43,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.WindowInsets
@@ -54,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import com.example.timefriend.R
 import com.example.timefriend.data.TimeRecord
 import com.example.timefriend.ui.component.DayPieChart
+import com.example.timefriend.ui.component.MonthYearPickerDialog
 import com.example.timefriend.ui.component.PieChartLegend
 import com.example.timefriend.ui.theme.GlobalCornerRadius
 import top.yukonga.miuix.kmp.basic.Card
@@ -75,6 +82,10 @@ fun HistoryScreen(
     modifier: Modifier = Modifier
 ) {
     var pieMode by remember { mutableStateOf(0) } // 0 = day, 1 = week, 2 = month
+    // 日历卡实测高度（px，onGloballyPositioned 上报）：饼图总结卡片与其等高，
+    // 机制对齐 sportlink HistoryScreen 的 RunningDistanceCard（calendarHeightPx / density）
+    var calendarHeightPx by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current.density
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val calendarContent = @Composable {
@@ -99,10 +110,24 @@ fun HistoryScreen(
     val pieContent = @Composable {
         Card(
             cornerRadius = GlobalCornerRadius,
-            colors = CardDefaults.defaultColors()
+            colors = CardDefaults.defaultColors(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    // 高度 = 日历卡实测高度（对齐 sportlink：两卡片底边恒平齐，切月不变）；
+                    // 首帧 calendarHeightPx==0 时 wrap 兜底
+                    if (calendarHeightPx > 0f) {
+                        Modifier.height((calendarHeightPx / density).dp)
+                    } else {
+                        Modifier
+                    }
+                )
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier
+                    .padding(16.dp)
+                    // 内容（切换器+饼图+图例）可能超出等高约束 → 滚动兜底防裁剪
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Day/Week/Month toggle with sliding pill
@@ -126,7 +151,9 @@ fun HistoryScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(GlobalCornerRadius))
-                        .background(MiuixTheme.colorScheme.surfaceContainerHigh)
+                        // 容器底色用 onSurface 8% 叠加：深色下比卡片底浅、浅色下比卡片底深，
+                        // 恒与背景可区分（原 surfaceContainerHigh 深色 #242424 与卡片 #222222 几乎同色）
+                        .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                         .padding(4.dp)
                         .width(200.dp)
                 ) {
@@ -208,6 +235,7 @@ fun HistoryScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .onGloballyPositioned { calendarHeightPx = it.size.height.toFloat() }
                     .padding(end = 8.dp)
             ) {
                 Box(
@@ -243,7 +271,10 @@ fun HistoryScreen(
         ) {
             Card(
                 cornerRadius = GlobalCornerRadius,
-                colors = CardDefaults.defaultColors()
+                colors = CardDefaults.defaultColors(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { calendarHeightPx = it.size.height.toFloat() }
             ) {
                 Box(modifier = Modifier.padding(12.dp)) {
                     calendarContent()
@@ -264,19 +295,39 @@ private fun CalendarView(
     onSelectDate: (String) -> Unit
 ) {
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val monthFormat = SimpleDateFormat(
-        stringResource(R.string.calendar_month_format), Locale.CHINESE
-    )
+    val context = LocalContext.current
 
     var baseDate by remember { mutableStateOf(Calendar.getInstance()) }
+    // 年月选择弹窗显隐（对齐 SportLink CalendarGrid：点击标题弹出）
+    var showMonthYearPicker by remember { mutableStateOf(false) }
 
     val today = dateFormat.format(java.util.Date())
-    val weekdays = stringArrayResource(R.array.weekday_headers)
+    val weekdays = context.resources.getStringArray(R.array.weekday_short).toList()
+
+    val monthTransitionSpec: AnimatedContentTransitionScope<Calendar>.() -> ContentTransform = {
+        val fromMonth =
+            initialState.get(Calendar.YEAR) * 12 + initialState.get(Calendar.MONTH)
+        val toMonth =
+            targetState.get(Calendar.YEAR) * 12 + targetState.get(Calendar.MONTH)
+        // SportLink CalendarGrid 同款 direction 约定：
+        // 切到下月（direction = 1）：新内容从右侧滑入、旧内容向左滑出（内容整体向左移动，
+        // 与"向左滑切下月"的手势方向一致）；切到上月（direction = -1）：新内容从左侧滑入
+        // （从左到右）、旧内容向右滑出。
+        val direction = if (toMonth > fromMonth) 1 else -1
+        val contentTransform =
+            (slideInHorizontally(animationSpec = tween(250)) { it * direction } +
+                fadeIn(animationSpec = tween(250)))
+                .togetherWith(
+                    slideOutHorizontally(animationSpec = tween(250)) { -it * direction } +
+                        fadeOut(animationSpec = tween(250))
+                )
+        contentTransform.using(SizeTransform(clip = false) { _, _ -> tween(250) })
+    }
 
     Column {
+        // 第一行：上一月 ◀ | 年月标题（居中） | 下一月 ▶，三者同处一行
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -291,6 +342,24 @@ private fun CalendarView(
                     .padding(8.dp),
                 color = MiuixTheme.colorScheme.onSurface
             )
+            AnimatedContent(
+                targetState = baseDate,
+                modifier = Modifier.weight(1f),
+                transitionSpec = monthTransitionSpec,
+                label = "calendar_month_title"
+            ) { targetDate ->
+                Text(
+                    text = formatMonthLabel(targetDate),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(GlobalCornerRadius))
+                        .clickable { showMonthYearPicker = true }
+                        .padding(vertical = 4.dp, horizontal = 8.dp),
+                    textAlign = TextAlign.Center,
+                    fontSize = 18.sp,
+                    color = MiuixTheme.colorScheme.onSurface
+                )
+            }
             Text(
                 text = stringResource(R.string.calendar_next_month),
                 modifier = Modifier
@@ -307,54 +376,43 @@ private fun CalendarView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 月份标题 + 星期行 + 日期网格：作为一个整体做 左右滑动 + 淡入淡出
+        // 星期行 + 日期网格：整体做左右滑动 + 淡入淡出
         AnimatedContent(
             targetState = baseDate,
-            modifier = Modifier.fillMaxWidth(),
-            transitionSpec = {
-                val fromMonth =
-                    initialState.get(Calendar.YEAR) * 12 + initialState.get(Calendar.MONTH)
-                val toMonth =
-                    targetState.get(Calendar.YEAR) * 12 + targetState.get(Calendar.MONTH)
-                val contentTransform =
-                    if (toMonth > fromMonth) {
-                        // 切到下月：旧内容向右滑出，新内容从左侧滑入
-                        (slideInHorizontally(animationSpec = tween(250)) { -it } +
-                            fadeIn(animationSpec = tween(250)))
-                            .togetherWith(
-                                slideOutHorizontally(animationSpec = tween(250)) { it } +
-                                    fadeOut(animationSpec = tween(250))
-                            )
-                    } else {
-                        // 切到上月：旧内容向左滑出，新内容从右侧滑入
-                        (slideInHorizontally(animationSpec = tween(250)) { it } +
-                            fadeIn(animationSpec = tween(250)))
-                            .togetherWith(
-                                slideOutHorizontally(animationSpec = tween(250)) { -it } +
-                                    fadeOut(animationSpec = tween(250))
-                            )
-                    }
-                contentTransform.using(SizeTransform(clip = false) { _, _ -> tween(250) })
-            },
-            label = "calendar_month_switch"
+            modifier = Modifier
+                .fillMaxWidth()
+                // 日历内部左右滑动切换月份（与 SportLink CalendarGrid 同款：累计拖拽超 80px 触发）
+                .pointerInput(Unit) {
+                    var totalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { totalDrag = 0f },
+                        onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
+                        onDragEnd = {
+                            if (totalDrag > 80f) {
+                                val prev = baseDate.clone() as Calendar
+                                prev.add(Calendar.MONTH, -1)
+                                baseDate = prev
+                            } else if (totalDrag < -80f) {
+                                val next = baseDate.clone() as Calendar
+                                next.add(Calendar.MONTH, 1)
+                                baseDate = next
+                            }
+                        }
+                    )
+                },
+            transitionSpec = monthTransitionSpec,
+            label = "calendar_month_grid"
         ) { targetDate ->
             // 关键：必须使用 targetDate（各内容自己的月份），不要读外部 baseDate
             val cal = targetDate.clone() as Calendar
             cal.set(Calendar.DAY_OF_MONTH, 1)
             val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
             val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+            // 下月日历（供尾部补位的暗淡日期生成日期串与跳月）
+            val nextMonthCal = cal.clone() as Calendar
+            nextMonthCal.add(Calendar.MONTH, 1)
 
             Column {
-                Text(
-                    text = monthFormat.format(targetDate.time),
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    fontSize = 18.sp,
-                    color = MiuixTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
                 Row(modifier = Modifier.fillMaxWidth()) {
                     weekdays.forEach { day ->
                         Text(
@@ -369,10 +427,11 @@ private fun CalendarView(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                val totalCells = firstDayOfWeek - 1 + daysInMonth
-                val rows = (totalCells + 6) / 7
-
-                for (row in 0 until rows) {
+                // 固定 42 格（6 行 × 7 列，SportLink CalendarGrid 同款「固定 6 行 + 邻月补位」）：
+                // 前导空白（dayNum < 1）不绘制；当月（1..daysInMonth）正常绘制；
+                // 尾部补下月暗淡日期（dayNum > daysInMonth → 显示下月 dayNum - daysInMonth），
+                // 填满 6 行 → 卡片高度恒定，不随月份行数（4/5/6 行）跳变。
+                for (row in 0 until 6) {
                     Row(modifier = Modifier.fillMaxWidth()) {
                         for (col in 0..6) {
                             val index = row * 7 + col
@@ -388,6 +447,23 @@ private fun CalendarView(
                                     onClick = { onSelectDate(dateStr) },
                                     modifier = Modifier.weight(1f)
                                 )
+                            } else if (dayNum > daysInMonth) {
+                                // 暗淡的下月日期：点击切到下月并选中该日
+                                val cellCal = nextMonthCal.clone() as Calendar
+                                cellCal.set(Calendar.DAY_OF_MONTH, dayNum - daysInMonth)
+                                val dateStr = dateFormat.format(cellCal.time)
+                                DayCell(
+                                    day = dayNum - daysInMonth,
+                                    isToday = false,
+                                    isSelected = false,
+                                    hasData = false,
+                                    isDimmed = true,
+                                    onClick = {
+                                        baseDate = cellCal
+                                        onSelectDate(dateStr)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
                             } else {
                                 Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
                             }
@@ -395,6 +471,22 @@ private fun CalendarView(
                     }
                 }
             }
+        }
+
+        // 年月选择弹窗（对齐 SportLink CalendarGrid：点击标题弹出，确认后跳月；
+        // 经 DialogOverlay 注册到 MainScreen 宿主 slot，同窗口玻璃卡 + Haze scrim）
+        if (showMonthYearPicker) {
+            MonthYearPickerDialog(
+                initialYear = baseDate.get(Calendar.YEAR),
+                initialMonth = baseDate.get(Calendar.MONTH) + 1,
+                onDismiss = { showMonthYearPicker = false },
+                onConfirm = { year, month ->
+                    val newMonth = baseDate.clone() as Calendar
+                    newMonth.set(Calendar.YEAR, year)
+                    newMonth.set(Calendar.MONTH, month - 1)
+                    baseDate = newMonth
+                },
+            )
         }
     }
 }
@@ -406,14 +498,18 @@ private fun DayCell(
     isSelected: Boolean,
     hasData: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDimmed: Boolean = false
 ) {
     val bgColor = when {
+        isDimmed -> MiuixTheme.colorScheme.surface.copy(alpha = 0f)
         isSelected -> MiuixTheme.colorScheme.primary
         isToday -> MiuixTheme.colorScheme.primary.copy(alpha = 0.15f)
         else -> MiuixTheme.colorScheme.surface.copy(alpha = 0f)
     }
     val textColor = when {
+        // 暗淡日期（邻月补位）：淡色显示，不参与选中/今天/数据着色
+        isDimmed -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.3f)
         isSelected -> MiuixTheme.colorScheme.onPrimary
         isToday -> MiuixTheme.colorScheme.primary
         else -> MiuixTheme.colorScheme.onSurface
@@ -434,7 +530,7 @@ private fun DayCell(
                 fontSize = 14.sp,
                 color = textColor
             )
-            if (hasData) {
+            if (hasData && !isDimmed) {
                 Box(
                     modifier = Modifier
                         .size(4.dp)
@@ -474,3 +570,11 @@ private fun PieModeChip(
         )
     }
 }
+
+/**
+ * 月份标签：固定 "yyyy/MM" 格式（对齐 SportLink CalendarGrid.formatMonthLabel），
+ * 跨语言一致、无本地化依赖——避免各语言"年月"后缀差异（中文"2026年10月"/
+ * 英文"October 2026"…），纯数字+斜杠对所有用户可读性一致。
+ */
+private fun formatMonthLabel(cal: Calendar): String =
+    SimpleDateFormat("yyyy/MM", Locale.US).format(cal.time)

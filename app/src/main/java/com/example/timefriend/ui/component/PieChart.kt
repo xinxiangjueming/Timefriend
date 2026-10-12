@@ -67,6 +67,11 @@ fun DayPieChart(
     val totalMinutes = slices.sumOf { it.minutes.toLong() }.coerceAtLeast(1L).toFloat()
     val totalHours = totalMinutes / 60f
 
+    // 中心文字字号随圆环内径等比缩放：内径 = size - strokeWidth。
+    // 保持文字占内径的固定比例（约 14.4%，即 220/26 时 28sp），
+    // 圆环（或内部区域）缩小时字号同步缩小，主页/历史各尺寸观感一致。
+    val centerTextSize = ((size - strokeWidth).value * 0.144f).sp
+
     var animPlayed by remember { mutableStateOf(false) }
     val animProgress by animateFloatAsState(
         targetValue = if (animPlayed) 1f else 0f,
@@ -115,13 +120,13 @@ fun DayPieChart(
                 val m = totalMinutes.toLong() % 60
                 Text(
                     text = stringResource(R.string.pie_duration_format, h, m),
-                    fontSize = 28.sp,
+                    fontSize = centerTextSize,
                     color = MiuixTheme.colorScheme.onBackground
                 )
             } else {
                 Text(
                     text = stringResource(R.string.pie_duration_empty),
-                    fontSize = 28.sp,
+                    fontSize = centerTextSize,
                     color = MiuixTheme.colorScheme.onBackground.copy(alpha = 0.3f)
                 )
             }

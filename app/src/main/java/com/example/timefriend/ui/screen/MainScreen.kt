@@ -1,16 +1,11 @@
 package com.example.timefriend.ui.screen
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -47,6 +42,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -70,7 +65,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.timefriend.R
 import com.example.timefriend.ui.component.BlurToast
+import com.example.timefriend.ui.component.DialogOverlaySlot
+import com.example.timefriend.ui.component.DialogOverlayState
+import com.example.timefriend.ui.component.LocalDialogOverlay
+import com.example.timefriend.ui.component.dialogHazeSource
 import com.example.timefriend.ui.theme.GlobalCornerRadius
+import dev.chrisbanes.haze.HazeState
 import com.example.timefriend.viewmodel.HistoryViewModel
 import com.example.timefriend.viewmodel.MainViewModel
 import com.example.timefriend.viewmodel.TimerEffect
@@ -111,8 +111,11 @@ fun MainScreen(
     val historyState by historyViewModel.state.collectAsState()
     val webDavState by webDavViewModel.state.collectAsState()
     val backdrop = rememberLayerBackdrop()
+    // 弹窗浮层宿主：backdrop 复用首页常驻录制层（导航栏/Toast 共用），Haze 源仅弹窗活跃时挂
+    val dialogOverlayState = remember { DialogOverlayState(backdrop, HazeState()) }
     val context = LocalContext.current
     var toastMessage by remember { mutableStateOf<String?>(null) }
+    var showSleepDialog by remember { mutableStateOf(false) }
     var topTab by remember { mutableIntStateOf(0) }
     var settingsScrollingUp by remember { mutableStateOf(false) }
 
@@ -125,91 +128,17 @@ fun MainScreen(
         }
     }
 
+    CompositionLocalProvider(LocalDialogOverlay provides dialogOverlayState) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Layer 1: content captured for blur backdrop
+        // Layer 1: content captured for blur backdrop（layerBackdrop 常驻供导航栏/Toast；
+        // hazeSource 仅弹窗活跃时挂，供弹窗外部 scrim 同窗口采样）
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MiuixTheme.colorScheme.background)
                 .layerBackdrop(backdrop)
+                .dialogHazeSource(dialogOverlayState)
         ) {
-            // Top bar — always composed to reserve layout space; invisible when not on Today tab.
-            run {
-                val topTabLabels = listOf(
-                    stringResource(R.string.top_today),
-                    stringResource(R.string.top_pomodoro)
-                )
-                val topTabAnim = remember { Animatable(0f) }
-                val topTabDensity = LocalDensity.current
-                LaunchedEffect(topTab) {
-                    val innerW = with(topTabDensity) { (200.dp - 4.dp * 2).toPx() }
-                    val chipW = innerW / topTabLabels.size
-                    topTabAnim.animateTo(
-                        chipW * topTab,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
-                    )
-                }
-                // 只在今日页显示；隐藏时 AnimatedVisibility 移除占位，不残留状态栏高度
-                AnimatedVisibility(
-                    visible = !mainState.showSettings && mainState.currentTab == 0,
-                    enter = fadeIn(animationSpec = tween(200)) +
-                        expandVertically(animationSpec = tween(200), expandFrom = Alignment.Top),
-                    exit = fadeOut(animationSpec = tween(200)) +
-                        shrinkVertically(animationSpec = tween(200), shrinkTowards = Alignment.Top),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(200.dp)
-                            .clip(RoundedCornerShape(GlobalCornerRadius))
-                            .background(MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f))
-                            .padding(4.dp)
-                    ) {
-                        // Pill
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.5f)
-                                .height(32.dp)
-                                .offset { IntOffset(topTabAnim.value.toInt(), 0) }
-                                .align(Alignment.CenterStart)
-                                .clip(RoundedCornerShape(GlobalCornerRadius))
-                                .background(MiuixTheme.colorScheme.primary)
-                        )
-                        // Labels
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            topTabLabels.forEachIndexed { index, label ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable(
-                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                            indication = null
-                                        ) { topTab = index }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        fontSize = 14.sp,
-                                        fontWeight = if (topTab == index) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (topTab == index) MiuixTheme.colorScheme.onPrimary
-                                                else MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                }
-                }
-
             Scaffold(
                 modifier = Modifier.fillMaxSize().weight(1f),
                 containerColor = Color.Transparent,
@@ -377,7 +306,7 @@ fun MainScreen(
                             )
                         }
 
-                        // —— 今日页：向左滑出 / 从左滑入（含内部 今日/专注 交叉淡化）——
+                        // —— 今日页：向左滑出 / 从左滑入（顶栏随页面整体滑动，被历史/设置页覆盖）——
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -397,67 +326,148 @@ fun MainScreen(
                                     }
                                 }
                         ) {
-                            // Nested crossfade: Today / Pomodoro
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                val pomodoroAlpha by animateFloatAsState(
-                                    targetValue = if (topTab == 1) 1f else 0f,
-                                    animationSpec = tween(200),
-                                    label = "pomodoro_fade"
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .zIndex(if (topTab == 1) 2f else 0f)
-                                        .alpha(pomodoroAlpha)
-                                        .pointerInput(topTab) {
-                                            if (topTab != 1) {
-                                                awaitPointerEventScope {
-                                                    while (true) {
-                                                        val e = awaitPointerEvent(PointerEventPass.Initial)
-                                                        e.changes.forEach { it.consume() }
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // 顶栏：今日/番茄钟 切换（内嵌于今日页顶部，随页面横滑、由其他页面覆盖）
+                                run {
+                                    val topTabLabels = listOf(
+                                        stringResource(R.string.top_today),
+                                        stringResource(R.string.top_pomodoro)
+                                    )
+                                    val topTabAnim = remember { Animatable(0f) }
+                                    val topTabDensity = LocalDensity.current
+                                    LaunchedEffect(topTab) {
+                                        val innerW = with(topTabDensity) { (200.dp - 4.dp * 2).toPx() }
+                                        val chipW = innerW / topTabLabels.size
+                                        topTabAnim.animateTo(
+                                            chipW * topTab,
+                                            animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .windowInsetsPadding(WindowInsets.statusBars)
+                                            .padding(top = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(200.dp)
+                                                .clip(RoundedCornerShape(GlobalCornerRadius))
+                                                .background(MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f))
+                                                .padding(4.dp)
+                                        ) {
+                                            // Pill
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.5f)
+                                                    .height(32.dp)
+                                                    .offset { IntOffset(topTabAnim.value.toInt(), 0) }
+                                                    .align(Alignment.CenterStart)
+                                                    .clip(RoundedCornerShape(GlobalCornerRadius))
+                                                    .background(MiuixTheme.colorScheme.primary)
+                                            )
+                                            // Labels
+                                            Row(modifier = Modifier.fillMaxWidth()) {
+                                                topTabLabels.forEachIndexed { index, label ->
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .clickable(
+                                                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                                indication = null
+                                                            ) { topTab = index }
+                                                            .padding(vertical = 6.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = label,
+                                                            fontSize = 14.sp,
+                                                            fontWeight = if (topTab == index) FontWeight.Bold else FontWeight.Normal,
+                                                            color = if (topTab == index) MiuixTheme.colorScheme.onPrimary
+                                                                    else MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
+                                                        )
                                                     }
                                                 }
                                             }
                                         }
-                                ) {
-                                    PomodoroScreen(
-                                        onSaveRecord = { category, minutes ->
-                                            timerViewModel.savePomodoroRecord(category, minutes)
-                                        },
-                                        modifier = Modifier.fillMaxSize()
-                                    )
+                                    }
                                 }
-
-                                val todayTabAlpha by animateFloatAsState(
-                                    targetValue = if (topTab == 0) 1f else 0f,
-                                    animationSpec = tween(200),
-                                    label = "today_tab_fade"
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .zIndex(if (topTab == 0) 2f else 0f)
-                                        .alpha(todayTabAlpha)
-                                        .pointerInput(topTab) {
-                                            if (topTab != 0) {
-                                                awaitPointerEventScope {
-                                                    while (true) {
-                                                        val e = awaitPointerEvent(PointerEventPass.Initial)
-                                                        e.changes.forEach { it.consume() }
+                                // Nested slide+fade: Today / Pomodoro（顶栏切换，与底栏切换同款滑动+淡化）
+                                Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                                    val topContentAnim = remember { Animatable(if (topTab == 1) 1f else 0f) }
+                                    var hasTopTabAnimated by remember { mutableStateOf(false) }
+                                    LaunchedEffect(topTab) {
+                                        val target = if (topTab == 1) 1f else 0f
+                                        if (hasTopTabAnimated) {
+                                            topContentAnim.animateTo(
+                                                target,
+                                                animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f)
+                                            )
+                                        } else {
+                                            topContentAnim.snapTo(target)
+                                            hasTopTabAnimated = true
+                                        }
+                                    }
+                                    // 番茄钟（专注）：从右滑入 / 向右滑出
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .zIndex(if (topTab == 1) 2f else 0f)
+                                            .graphicsLayer {
+                                                translationX = widthPx * (1f - topContentAnim.value)
+                                                alpha = 0.35f + 0.65f * topContentAnim.value
+                                            }
+                                            .pointerInput(topTab) {
+                                                if (topTab != 1) {
+                                                    awaitPointerEventScope {
+                                                        while (true) {
+                                                            val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                            e.changes.forEach { it.consume() }
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                ) {
-                                    TodayScreen(
-                                        records = timerState.todayRecords,
-                                        activeCategory = timerState.activeCategory,
-                                        timerElapsed = timerState.timerElapsed,
-                                        onStartTimer = { timerViewModel.startTimer(it) },
-                                        onStopTimer = { timerViewModel.stopTimer() },
-                                        onSaveSleep = { timerViewModel.saveSleep(it) },
-                                        modifier = Modifier.fillMaxSize()
-                                    )
+                                    ) {
+                                        PomodoroScreen(
+                                            onSaveRecord = { category, minutes ->
+                                                timerViewModel.savePomodoroRecord(category, minutes)
+                                            },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+
+                                    // 今日：向左滑出 / 从左滑入
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .zIndex(if (topTab == 0) 2f else 0f)
+                                            .graphicsLayer {
+                                                translationX = -widthPx * topContentAnim.value
+                                                alpha = 1f - 0.65f * topContentAnim.value
+                                            }
+                                            .pointerInput(topTab) {
+                                                if (topTab != 0) {
+                                                    awaitPointerEventScope {
+                                                        while (true) {
+                                                            val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                            e.changes.forEach { it.consume() }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                    ) {
+                                        TodayScreen(
+                                            records = timerState.todayRecords,
+                                            activeCategory = timerState.activeCategory,
+                                            timerElapsed = timerState.timerElapsed,
+                                            onStartTimer = { timerViewModel.startTimer(it) },
+                                            onStopTimer = { timerViewModel.stopTimer() },
+                                            onSaveSleep = { timerViewModel.saveSleep(it) },
+                                            onShowSleep = { showSleepDialog = true },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -645,5 +655,21 @@ fun MainScreen(
             }
         }
         } // AnimatedVisibility
+
+        // Layer 5: sleep input dialog（经 DialogOverlay 注册到宿主 slot 渲染，
+        // 外部 Haze scrim + 内部 miuix 玻璃卡，BackHandler 在弹窗内部）
+        if (showSleepDialog) {
+            SleepInputDialog(
+                onDismiss = { showSleepDialog = false },
+                onSave = { minutes ->
+                    timerViewModel.saveSleep(minutes)
+                    showSleepDialog = false
+                }
+            )
+        }
+
+        // Layer 6: 弹窗浮层 slot（DialogOverlay 注册的弹窗在此渲染，与采样源兄弟防自采样）
+        DialogOverlaySlot(dialogOverlayState)
+    }
     }
 }

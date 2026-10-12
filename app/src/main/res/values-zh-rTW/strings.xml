@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 應用程式 -->
+    <string name="app_name">愛時間</string>
+
+    <!-- 頂部欄 -->
+    <string name="top_today">今日</string>
+    <string name="top_pomodoro">番茄鐘</string>
+    <string name="top_settings">設定</string>
+
+    <!-- 底部導航 -->
+    <string name="nav_today">今日</string>
+    <string name="nav_history">歷史</string>
+
+    <!-- 時間分類 -->
+    <string name="category_sleep">睡眠</string>
+    <string name="category_waste">浪費</string>
+    <string name="category_fixed">固定</string>
+    <string name="category_investment">投資</string>
+
+    <!-- 圓餅圖 -->
+    <string name="pie_hours_unit">小時</string>
+    <string name="pie_hours_format">%.1fh</string>
+    <string name="pie_duration_format">%1$d小時%2$d分鐘</string>
+    <string name="pie_duration_empty">0小時0分鐘</string>
+
+    <!-- 今日畫面：分類按鈕 -->
+    <string name="btn_record">記錄</string>
+    <string name="btn_tap_to_start">點擊開始</string>
+    <string name="btn_tap_to_stop">點擊停止</string>
+
+    <!-- 時長顯示 -->
+    <string name="duration_hours_minutes">%1$d小時%2$d分鐘</string>
+    <string name="duration_minutes">%d分鐘</string>
+
+    <!-- 睡眠輸入對話框 -->
+    <string name="sleep_dialog_title">記錄睡眠時間</string>
+    <string name="sleep_label_hours">小時</string>
+    <string name="sleep_label_minutes">分鐘</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_save">儲存</string>
+    <string name="action_confirm">確定</string>
+    <string name="month_year_picker_title">選擇年月</string>
+
+    <!-- 提示訊息 -->
+    <string name="toast_too_short">時間較短</string>
+
+    <!-- 歷史畫面 -->
+    <string name="history_no_records">該日期暫無記錄</string>
+    <string name="history_no_records_today">本日暫無記錄</string>
+    <string name="history_no_records_week">本週暫無記錄</string>
+    <string name="history_no_records_month">本月暫無記錄</string>
+    <string name="history_day_total">當日記錄</string>
+    <string name="history_week_total">本週記錄</string>
+    <string name="history_month_total">本月記錄</string>
+        <string name="calendar_prev_month">◀</string>
+    <string name="calendar_next_month">▶</string>
+    <string name="calendar_day_mode">日</string>
+    <string name="calendar_month_mode">月</string>
+    <string name="calendar_week_mode">週</string>
+
+    <!-- 番茄鐘 -->
+    <string name="pomodoro_focus">專注</string>
+    <string name="pomodoro_rest">休息</string>
+    <string name="pomodoro_custom">自訂</string>
+    <string name="pomodoro_custom_title">設定時間</string>
+    <string name="pomodoro_start">開始</string>
+    <string name="pomodoro_pause">暫停</string>
+    <string name="pomodoro_resume">繼續</string>
+    <string name="pomodoro_stop">停止</string>
+    <string name="pomodoro_focus_phase">專注中</string>
+    <string name="pomodoro_rest_phase">休息中</string>
+    <string name="pomodoro_done">完成！</string>
+    <string name="pomodoro_minutes_format">%d分鐘</string>
+
+    <!-- 設定 -->
+    <string name="settings_title">設定</string>
+    <string name="webdav_title">WebDAV 備份</string>
+    <string name="webdav_server">伺服器位址</string>
+    <string name="webdav_server_hint">https://example.com/dav/</string>
+    <string name="webdav_username">使用者名稱</string>
+    <string name="webdav_password">密碼</string>
+    <string name="webdav_auto_dir">備份將自動儲存到雲端 Timefriend 目錄</string>
+    <string name="webdav_backup">備份</string>
+    <string name="webdav_sync">同步</string>
+    <string name="webdav_saving">儲存設定中…</string>
+    <string name="webdav_backing_up">正在備份…</string>
+    <string name="webdav_syncing">正在同步…</string>
+    <string name="webdav_backup_success">備份成功</string>
+    <string name="webdav_sync_success">同步成功</string>
+    <string name="webdav_error_empty">請填寫完整資訊</string>
+    <string name="webdav_error_network">網路錯誤：%s</string>
+    <string name="webdav_error_mkcol">無法在雲端建立 Timefriend 目錄：%s</string>
+    <string name="webdav_error_upload">上傳備份失敗：%s</string>
+    <string name="webdav_error_auth">WebDAV 認證失敗，請檢查使用者名稱或密碼</string>
+
+    <!-- 權限 -->
+    <string name="permissions_title">權限管理</string>
+    <string name="perm_battery">電池無限制</string>
+    <string name="perm_battery_desc">允許背景執行，番茄鐘倒數不會被系統終止</string>
+    <string name="perm_notification">通知權限</string>
+    <string name="perm_notification_desc">允許發送通知，番茄鐘在背景執行時顯示倒數</string>
+    <string name="perm_accessibility">無障礙服務</string>
+    <string name="perm_accessibility_desc">提升程序優先順序，防止背景被系統回收</string>
+    <string name="accessibility_service_desc">用於保持應用程式在背景執行，防止被系統回收</string>
+    <string name="perm_tip">請確保應用程式處於背景鎖定狀態</string>
+    <string name="perm_granted">已授權</string>
+    <string name="perm_not_granted">未授權</string>
+    <string name="perm_grant_button">前往授權</string>
+
+    <!-- 番茄鐘通知 -->
+    <string name="pomodoro_channel_name">番茄鐘</string>
+    <string name="pomodoro_channel_desc">番茄鐘倒數通知</string>
+    <string name="pomodoro_notif_focus">番茄鐘</string>
+    <string name="pomodoro_notif_rest">休息</string>
+    <string name="pomodoro_notif_stop">停止</string>
+    <string name="pomodoro_notif_paused">已暫停</string>
+    <string name="pomodoro_notif_running">進行中</string>
+
+    <!-- 計時器通知 -->
+    <string name="timer_channel_name">計時器</string>
+    <string name="timer_channel_desc">時間記錄計時通知</string>
+    <string name="timer_notif_idle_title">點擊開始計時</string>
+    <string name="timer_notif_tap_start">點擊下方按鈕開始</string>
+    <string name="timer_notif_timing">計時中</string>
+    <string name="timer_notif_stop">停止</string>
+
+    <!-- 設定 -->
+    <string name="settings_blur_title">懸浮欄模糊</string>
+    <string name="settings_blur_level">模糊程度：%d</string>
+
+    <!-- WebDAV 其他 -->
+    <string name="webdav_no_backup">雲端無備份檔案</string>
+
+    <!-- 日曆星期表頭（週日為首位） -->
+    <string-array name="weekday_short">
+        <item>日</item>
+        <item>一</item>
+        <item>二</item>
+        <item>三</item>
+        <item>四</item>
+        <item>五</item>
+        <item>六</item>
+    </string-array>
+
+</resources>

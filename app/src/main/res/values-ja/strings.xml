@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">愛時間</string>
+
+    <!-- Top bar -->
+    <string name="top_today">今日</string>
+    <string name="top_pomodoro">ポモドーロ</string>
+    <string name="top_settings">設定</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_today">今日</string>
+    <string name="nav_history">履歴</string>
+
+    <!-- Time categories -->
+    <string name="category_sleep">睡眠</string>
+    <string name="category_waste">無駄</string>
+    <string name="category_fixed">固定</string>
+    <string name="category_investment">投資</string>
+
+    <!-- Pie chart -->
+    <string name="pie_hours_unit">時間</string>
+    <string name="pie_hours_format">%.1f時間</string>
+    <string name="pie_duration_format">%1$d時間%2$d分</string>
+    <string name="pie_duration_empty">0時間0分</string>
+
+    <!-- Today screen: category buttons -->
+    <string name="btn_record">記録</string>
+    <string name="btn_tap_to_start">タップして開始</string>
+    <string name="btn_tap_to_stop">タップして停止</string>
+
+    <!-- Duration display -->
+    <string name="duration_hours_minutes">%1$d時間%2$d分</string>
+    <string name="duration_minutes">%d分</string>
+
+    <!-- Sleep input dialog -->
+    <string name="sleep_dialog_title">睡眠時間を記録</string>
+    <string name="sleep_label_hours">時間</string>
+    <string name="sleep_label_minutes">分</string>
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_save">保存</string>
+    <string name="action_confirm">OK</string>
+    <string name="month_year_picker_title">年月を選択</string>
+
+    <!-- Toast messages -->
+    <string name="toast_too_short">時間が短すぎます</string>
+
+    <!-- History screen -->
+    <string name="history_no_records">この日の記録はありません</string>
+    <string name="history_no_records_today">本日の記録はありません</string>
+    <string name="history_no_records_week">今週の記録はありません</string>
+    <string name="history_no_records_month">今月の記録はありません</string>
+    <string name="history_day_total">当日の記録</string>
+    <string name="history_week_total">今週の記録</string>
+    <string name="history_month_total">今月の記録</string>
+        <string name="calendar_prev_month">◀</string>
+    <string name="calendar_next_month">▶</string>
+    <string name="calendar_day_mode">日</string>
+    <string name="calendar_month_mode">月</string>
+    <string name="calendar_week_mode">週</string>
+
+    <!-- Pomodoro -->
+    <string name="pomodoro_focus">集中</string>
+    <string name="pomodoro_rest">休憩</string>
+    <string name="pomodoro_custom">カスタム</string>
+    <string name="pomodoro_custom_title">時間を設定</string>
+    <string name="pomodoro_start">開始</string>
+    <string name="pomodoro_pause">一時停止</string>
+    <string name="pomodoro_resume">再開</string>
+    <string name="pomodoro_stop">停止</string>
+    <string name="pomodoro_focus_phase">集中中</string>
+    <string name="pomodoro_rest_phase">休憩中</string>
+    <string name="pomodoro_done">完了！</string>
+    <string name="pomodoro_minutes_format">%d分</string>
+
+    <!-- Settings -->
+    <string name="settings_title">設定</string>
+    <string name="webdav_title">WebDAV バックアップ</string>
+    <string name="webdav_server">サーバーアドレス</string>
+    <string name="webdav_server_hint">https://example.com/dav/</string>
+    <string name="webdav_username">ユーザー名</string>
+    <string name="webdav_password">パスワード</string>
+    <string name="webdav_auto_dir">バックアップはクラウドの Timefriend フォルダに自動保存されます</string>
+    <string name="webdav_backup">バックアップ</string>
+    <string name="webdav_sync">同期</string>
+    <string name="webdav_saving">設定を保存中…</string>
+    <string name="webdav_backing_up">バックアップ中…</string>
+    <string name="webdav_syncing">同期中…</string>
+    <string name="webdav_backup_success">バックアップ完了</string>
+    <string name="webdav_sync_success">同期完了</string>
+    <string name="webdav_error_empty">すべての項目を入力してください</string>
+    <string name="webdav_error_network">ネットワークエラー：%s</string>
+    <string name="webdav_error_mkcol">クラウドに Timefriend フォルダを作成できません：%s</string>
+    <string name="webdav_error_upload">アップロードに失敗しました：%s</string>
+    <string name="webdav_error_auth">WebDAV 認証に失敗しました。ユーザー名とパスワードを確認してください</string>
+
+    <!-- Permissions -->
+    <string name="permissions_title">権限管理</string>
+    <string name="perm_battery">バッテリー制限なし</string>
+    <string name="perm_battery_desc">バックグラウンドでの動作を許可し、ポモドーロのカウントダウンがシステムに終了されないようにします</string>
+    <string name="perm_notification">通知権限</string>
+    <string name="perm_notification_desc">通知を許可し、ポモドーロのバックグラウンド実行時にカウントダウンを表示します</string>
+    <string name="perm_accessibility">ユーザー補助サービス</string>
+    <string name="perm_accessibility_desc">プロセスの優先度を上げ、バックグラウンドでシステムに回収されないようにします</string>
+    <string name="accessibility_service_desc">アプリをバックグラウンドで実行し続けるため</string>
+    <string name="perm_tip">アプリをバックグラウンドでロック状態にしてください</string>
+    <string name="perm_granted">許可済み</string>
+    <string name="perm_not_granted">未許可</string>
+    <string name="perm_grant_button">許可</string>
+
+    <!-- Pomodoro notification -->
+    <string name="pomodoro_channel_name">ポモドーロ</string>
+    <string name="pomodoro_channel_desc">ポモドーロのカウントダウン通知</string>
+    <string name="pomodoro_notif_focus">ポモドーロ</string>
+    <string name="pomodoro_notif_rest">休憩</string>
+    <string name="pomodoro_notif_stop">停止</string>
+    <string name="pomodoro_notif_paused">一時停止中</string>
+    <string name="pomodoro_notif_running">実行中</string>
+
+    <!-- Timer notification -->
+    <string name="timer_channel_name">タイマー</string>
+    <string name="timer_channel_desc">時間記録のタイマー通知</string>
+    <string name="timer_notif_idle_title">タップして開始</string>
+    <string name="timer_notif_tap_start">下のボタンをタップして開始</string>
+    <string name="timer_notif_timing">計測中</string>
+    <string name="timer_notif_stop">停止</string>
+
+    <!-- Settings -->
+    <string name="settings_blur_title">オーバーレイのぼかし</string>
+    <string name="settings_blur_level">ぼかし：%d</string>
+
+    <!-- WebDAV extra -->
+    <string name="webdav_no_backup">クラウドにバックアップがありません</string>
+
+    <!-- カレンダーの曜日見出し（日曜始まり） -->
+    <string-array name="weekday_short">
+        <item>日</item>
+        <item>月</item>
+        <item>火</item>
+        <item>水</item>
+        <item>木</item>
+        <item>金</item>
+        <item>土</item>
+    </string-array>
+
+</resources>

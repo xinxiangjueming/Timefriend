@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,12 +48,15 @@ import androidx.compose.ui.unit.sp
 import com.example.timefriend.R
 import com.example.timefriend.data.TimeCategory
 import com.example.timefriend.service.PomodoroService
+import com.example.timefriend.ui.component.BlurredDialogScaffold
+import com.example.timefriend.ui.component.DialogButtonRow
+import com.example.timefriend.ui.component.DialogCancelButton
+import com.example.timefriend.ui.component.DialogConfirmButton
+import com.example.timefriend.ui.component.DialogOverlay
 import kotlinx.coroutines.delay
 import com.example.timefriend.ui.theme.GlobalCornerRadius
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -562,11 +566,13 @@ private fun CustomMinutesDialog(
 ) {
     var value by remember { mutableIntStateOf(20) }
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Card(
-            cornerRadius = GlobalCornerRadius,
-            colors = CardDefaults.defaultColors()
-        ) {
+    // 对齐 SportLink 定稿：经 DialogOverlay 注册到 MainScreen 宿主 slot（同窗口浮层），
+    // 外部 Haze scrim（20dp 模糊 + 25% 压暗）+ 内部 miuix 玻璃卡（10f + 高光 + tint 0.55）。
+    // 不再用 androidx Dialog 独立窗口 + 实心 Card（跨窗口无法同窗口采样，且原样无任何模糊）。
+    // 宽度由 BlurredDialogScaffold 内部 dialogWidthAdaptive 统一（对齐 SportLink）。
+    DialogOverlay {
+        BackHandler { onDismiss() }
+        BlurredDialogScaffold(onDismissRequest = onDismiss) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -602,23 +608,20 @@ private fun CustomMinutesDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        text = stringResource(R.string.action_cancel),
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.textButtonColors(
-                            textColor = MiuixTheme.colorScheme.onSurfaceContainerVariant
+                DialogButtonRow(
+                    cancel = {
+                        DialogCancelButton(
+                            text = stringResource(R.string.action_cancel),
+                            onClick = onDismiss
                         )
-                    )
-                    TextButton(
-                        text = stringResource(R.string.action_save),
-                        onClick = { onConfirm(value) },
-                        colors = ButtonDefaults.textButtonColorsPrimary()
-                    )
-                }
+                    },
+                    confirm = {
+                        DialogConfirmButton(
+                            text = stringResource(R.string.action_save),
+                            onClick = { onConfirm(value) }
+                        )
+                    }
+                )
             }
         }
     }

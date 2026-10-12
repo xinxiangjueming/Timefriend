@@ -16,6 +16,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 仅保留实际支持的语言资源（默认 values=简体中文 + 4 套翻译），
+        // 裁掉依赖库（androidx/miuix 等）自带的其他 30+ 种语言
+        resConfigs("en", "ja", "ko", "zh-rTW")
     }
 
     buildTypes {
@@ -61,6 +65,9 @@ dependencies {
     implementation(libs.miuix.ui)
     implementation(libs.miuix.blur)
     implementation(libs.miuix.icons)
+
+    // Haze（弹窗外部 scrim 同窗口采样模糊，对齐 SportLink v1 稳定版）
+    implementation(libs.haze)
 
     // OkHttp for WebDAV
     implementation(libs.okhttp)

@@ -39,6 +39,8 @@
     <string name="sleep_label_minutes">分钟</string>
     <string name="action_cancel">取消</string>
     <string name="action_save">保存</string>
+    <string name="action_confirm">确定</string>
+    <string name="month_year_picker_title">选择年月</string>
 
     <!-- Toast messages -->
     <string name="toast_too_short">时间较短</string>
@@ -51,9 +53,7 @@
     <string name="history_day_total">当日记录</string>
     <string name="history_week_total">本周记录</string>
     <string name="history_month_total">本月记录</string>
-    <string name="calendar_month_format">yyyy年M月</string>
-    <string name="calendar_week_format">M月d日周</string>
-    <string name="calendar_prev_month">◀</string>
+        <string name="calendar_prev_month">◀</string>
     <string name="calendar_next_month">▶</string>
     <string name="calendar_day_mode">日</string>
     <string name="calendar_month_mode">月</string>
@@ -63,7 +63,7 @@
     <string name="pomodoro_focus">投入</string>
     <string name="pomodoro_rest">休息</string>
     <string name="pomodoro_custom">自定义</string>
-    <string name="pomodoro_custom_title">设置时间（分钟）</string>
+    <string name="pomodoro_custom_title">设置时间</string>
     <string name="pomodoro_start">开始</string>
     <string name="pomodoro_pause">暂停</string>
     <string name="pomodoro_resume">继续</string>
@@ -132,8 +132,8 @@
     <!-- WebDAV extra -->
     <string name="webdav_no_backup">云端无备份文件</string>
 
-    <!-- Calendar weekday headers -->
-    <string-array name="weekday_headers">
+    <!-- 日历星期表头（周日为首位） -->
+    <string-array name="weekday_short">
         <item>日</item>
         <item>一</item>
         <item>二</item>
@@ -142,4 +142,5 @@
         <item>五</item>
         <item>六</item>
     </string-array>
+
 </resources>
