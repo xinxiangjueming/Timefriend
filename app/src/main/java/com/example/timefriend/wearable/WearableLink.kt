@@ -166,7 +166,14 @@ class WearableLink private constructor(
         // 先占位再注册：start 直查与 onServiceConnected 回调会并发到这，若等
         // addListener 成功才登记，两路都会通过检查 → 同一 node 双注册 → 消息双份投递
         if (!boundNodes.add(id)) return
-        val auth = authApi ?: return
+        val auth = authApi
+        if (auth == null) {
+            // start() 未完成（运动健康未就绪等）：退占位，start() 恢复后 rebind 可重试；
+            // 占位若不退，bindNodes 会因 id 已在集合里跳过该节点，从此再也无法注册
+            Log.w(TAG, "ensureListener: authApi null (start incomplete), release placeholder")
+            boundNodes.remove(id)
+            return
+        }
         try {
             auth.checkPermission(id, Permission.DEVICE_MANAGER)
                 .addOnSuccessListener { granted ->
@@ -199,8 +206,20 @@ class WearableLink private constructor(
                     if (pendingWake.get()) launchWearApp(id)
                 }
                 .addOnFailureListener { e ->
-                    Log.w(TAG, "addListener failed: ${e.message}")
-                    boundNodes.remove(id) // 退占位，允许下一轮 rebind 重试
+                    val m = e?.message ?: ""
+                    if (m.contains("registered", ignoreCase = true)) {
+                        // SDK 报 already registered = 监听其实在（服务重连后自建账本
+                        // 被 onServiceDisconnected 清空、SDK 注册状态残留——手册口径
+                        // 「以 SDK 为准」）。按已绑定处理并兑现 pendingWake；否则
+                        // remove→rebind→再报已注册 死循环，boundNodes 恒空，
+                        // 「手表同步服务」开关永远唤不起表端（2026-10-14 真机实证：
+                        // 杀手机端进程复位 SDK 状态后恢复唤起，即此死锁）
+                        Log.i(TAG, "addListener reports already registered, treat as bound")
+                        if (pendingWake.get()) launchWearApp(id)
+                    } else {
+                        Log.w(TAG, "addListener failed: $m")
+                        boundNodes.remove(id) // 退占位，允许下一轮 rebind 重试
+                    }
                 }
         } catch (e: Throwable) {
             Log.w(TAG, "addListener threw: ${e.message}")
@@ -213,7 +232,18 @@ class WearableLink private constructor(
      *  监听注册成功那一刻自动拉起（手表晚连 / 穿戴服务晚起都覆盖）。 */
     @Synchronized
     fun wakeWatch() {
+        // start() 曾失败（如 App 启动时运动健康未就绪）→ 本次开关操作就地重试
+        // 初始化（幂等）；否则各 API 引用为空，本次唤起会静默无效
+        if (!started.get()) {
+            Log.i(TAG, "wakeWatch: previous start incomplete, retrying init")
+            start()
+            if (!started.get()) {
+                Log.w(TAG, "wakeWatch: init still failed (Xiaomi Wear app missing?)")
+                return
+            }
+        }
         val nodes = boundNodes.toList()
+        Log.i(TAG, "wakeWatch: boundNodes=$nodes pendingWake=${pendingWake.get()}")
         if (nodes.isEmpty()) {
             pendingWake.set(true)
             bindNodes()
