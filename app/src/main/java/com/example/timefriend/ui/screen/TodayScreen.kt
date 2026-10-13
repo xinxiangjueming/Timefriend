@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -59,9 +60,11 @@ fun TodayScreen(
         Row(
             modifier = modifier
                 .fillMaxSize()
-                // 横屏:左避状态栏条、右避手势导航条
+                // 横屏:左避状态栏条、右避手势导航条。
+                // Top 避让不放此处——真正滚动的是左右两列，顶部避让必须在列内
+                // verticalScroll 之后（沉浸滚动铁律），否则内容滚到顶被裁在避让线
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(start = 16.dp, end = 16.dp)
         ) {
             // Left side: pie chart + legend
             Column(
@@ -69,11 +72,13 @@ fun TodayScreen(
                     .weight(1f)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
-                    .padding(end = 12.dp),
+                    // 顶栏 overlay 悬浮在页面顶（不占位）：列内避让 状态栏 + 切换器高度（56dp）
+                    .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                    .padding(end = 12.dp, top = 56.dp, bottom = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                DayPieChart(records = records, size = 180.dp, strokeWidth = 22.dp)
+                DayPieChart(records = records, size = 180.dp, filled = true, showCenterText = false)
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
                     cornerRadius = GlobalCornerRadius,
@@ -94,7 +99,9 @@ fun TodayScreen(
                     .weight(1f)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
-                    .padding(start = 12.dp),
+                    // 同左列：顶部避让在 scroll 之内，滚动后内容可显示在状态栏区域
+                    .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                    .padding(start = 12.dp, top = 56.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -155,17 +162,21 @@ fun TodayScreen(
             }
         }
     } else {
-        // Portrait: original vertical layout
+        // Portrait: original vertical layout。
+        // 顶部避让（statusBars + 顶栏切换器 48dp + 8dp 间距）置于 verticalScroll 之内：
+        // 内容区已从页面顶开始（顶栏 overlay 不占位），滚动后内容可显示在状态栏区域
+        //（对齐 sportlink 沉浸滚动语义）
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                .padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            DayPieChart(records = records, size = 220.dp, strokeWidth = 26.dp)
+            DayPieChart(records = records, size = 220.dp, filled = true, showCenterText = false)
 
             Spacer(modifier = Modifier.height(20.dp))
 

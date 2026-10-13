@@ -6,7 +6,9 @@ import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 
 /** WebDAV 错误分类，用于向用户展示不同提示。 */
 enum class WebDavErrorKind { MKCOL, UPLOAD, DOWNLOAD, AUTH }
@@ -34,6 +36,9 @@ class WebDavHelper(
         const val BACKUP_FILE_NAME = "timefriend_backup.json"
         /** 云端固定相对路径：Timefriend/timefriend_backup.json */
         const val REMOTE_FILE_PATH = "$DIRECTORY_NAME/$BACKUP_FILE_NAME"
+
+        /** 云端 Room 库压缩包相对路径（zstd 单文件备份）。 */
+        const val REMOTE_DB_RELPATH = "$DIRECTORY_NAME/timefriend.db.zst"
 
         /** 规范化相对路径：去首尾 '/'，过滤空段。 */
         fun normalizePath(path: String): String =
@@ -131,6 +136,54 @@ class WebDavHelper(
             when {
                 response.isSuccessful -> response.body?.string()
                 response.code == 404 -> null
+                response.code in 401..403 -> throw WebDavException(WebDavErrorKind.AUTH, "认证失败 (HTTP ${response.code})")
+                else -> throw WebDavException(WebDavErrorKind.DOWNLOAD, "Download failed: ${response.code} ${response.message}")
+            }
+        }
+    }
+
+    /**
+     * Upload a binary file to the WebDAV server (PUT). [remotePath] is the
+     * relative path including the "Timefriend/" prefix (e.g. [REMOTE_DB_RELPATH]).
+     */
+    suspend fun uploadFile(remotePath: String, file: File) = withContext(Dispatchers.IO) {
+        val url = buildUrl(server, remotePath)
+        val body = file.asRequestBody("application/octet-stream".toMediaType())
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", credentials)
+            .put(body)
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val kind = if (response.code in 401..403) WebDavErrorKind.AUTH else WebDavErrorKind.UPLOAD
+                throw WebDavException(kind, "Upload failed: ${response.code} ${response.message}")
+            }
+        }
+    }
+
+    /**
+     * Download a binary file (GET) into [target].
+     * Returns false when the remote file does not exist (HTTP 404, idempotent);
+     * any other failure throws [WebDavException].
+     */
+    suspend fun downloadFile(remotePath: String, target: File): Boolean = withContext(Dispatchers.IO) {
+        val url = buildUrl(server, remotePath)
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", credentials)
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            when {
+                response.isSuccessful -> {
+                    target.parentFile?.mkdirs()
+                    response.body?.byteStream()?.use { input ->
+                        target.outputStream().use { out -> input.copyTo(out) }
+                    }
+                    true
+                }
+                response.code == 404 -> false
                 response.code in 401..403 -> throw WebDavException(WebDavErrorKind.AUTH, "认证失败 (HTTP ${response.code})")
                 else -> throw WebDavException(WebDavErrorKind.DOWNLOAD, "Download failed: ${response.code} ${response.message}")
             }

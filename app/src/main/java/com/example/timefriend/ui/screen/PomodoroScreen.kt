@@ -4,6 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.res.Configuration
 import android.os.VibrationEffect
 import android.os.Vibrator
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -42,11 +48,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.timefriend.R
-import com.example.timefriend.data.TimeCategory
 import com.example.timefriend.service.PomodoroService
 import com.example.timefriend.ui.component.BlurredDialogScaffold
 import com.example.timefriend.ui.component.DialogButtonRow
@@ -63,11 +69,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private val focusOptions = listOf(15, 25, 35)
 private val restOptions = listOf(5, 8, 10)
+private val cycleOptions = listOf(1, 2, 4)
+private const val CYCLE_CUSTOM_MAX = 20
 private val SkyBlue = Color(0xFF87CEEB)
 
 @Composable
 fun PomodoroScreen(
-    onSaveRecord: (TimeCategory, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -78,6 +85,7 @@ fun PomodoroScreen(
 
     var focusMinutes by remember { mutableIntStateOf(25) }
     var restMinutes by remember { mutableIntStateOf(5) }
+    var cycleCount by remember { mutableIntStateOf(1) }
     var isRunning by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var isFocusPhase by remember { mutableStateOf(true) }
@@ -110,17 +118,13 @@ fun PomodoroScreen(
                 val focus = intent.getBooleanExtra(PomodoroService.EXTRA_IS_FOCUS, true)
                 val paused = intent.getBooleanExtra(PomodoroService.EXTRA_IS_PAUSED, false)
 
-                // Detect focus → rest transition (phase ended naturally)
+                // Detect focus → rest transition (phase ended naturally):
+                // the session is persisted by PomodoroService; UI only vibrates.
                 if (prevIsFocusPhase && !focus && rem > 0) {
-                    val elapsed = focusMinutes
-                    if (elapsed >= 3) {
-                        onSaveRecord(TimeCategory.INVESTMENT, elapsed)
-                    }
                     vibe(vibrator, longArrayOf(0, 1500))
                 }
                 // Detect rest ended naturally (remaining == 0, was not focus)
                 if (!prevIsFocusPhase && !focus && rem == 0) {
-                    onSaveRecord(TimeCategory.FIXED, restMinutes)
                     vibe(vibrator, longArrayOf(0, 200))
                 }
 
@@ -177,12 +181,25 @@ fun PomodoroScreen(
     }
 
     if (showCustomDialog) {
-        CustomMinutesDialog(
-            title = stringResource(R.string.pomodoro_custom_title),
+        val (title, initial, max) = when (customTarget) {
+            "cycles" -> Triple(
+                stringResource(R.string.pomodoro_custom_count_title),
+                cycleCount,
+                CYCLE_CUSTOM_MAX
+            )
+            else -> Triple(stringResource(R.string.pomodoro_custom_title), 20, 120)
+        }
+        CustomValueDialog(
+            title = title,
+            initialValue = initial,
+            maxValue = max,
             onDismiss = { showCustomDialog = false },
-            onConfirm = { mins ->
-                if (customTarget == "focus") focusMinutes = mins
-                else restMinutes = mins
+            onConfirm = { v ->
+                when (customTarget) {
+                    "cycles" -> cycleCount = v
+                    "focus" -> focusMinutes = v
+                    else -> restMinutes = v
+                }
                 showCustomDialog = false
             }
         )
@@ -196,7 +213,9 @@ fun PomodoroScreen(
                 .fillMaxSize()
                 // 横屏:左避状态栏条、右避手势导航条
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                .padding(horizontal = 16.dp)
+                // 顶栏 overlay 悬浮在页面顶（不占位）：内容避让 状态栏 + 切换器高度（48dp）
+                .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                .padding(start = 16.dp, end = 16.dp, top = 48.dp)
         ) {
             // Left: focus & rest options
             Column(
@@ -213,7 +232,8 @@ fun PomodoroScreen(
                     selectedValue = focusMinutes,
                     onSelect = { focusMinutes = it },
                     onCustom = { customTarget = "focus"; showCustomDialog = true },
-                    enabled = !isRunning
+                    enabled = !isRunning,
+                    optionLabel = { stringResource(R.string.pomodoro_minutes_format, it) }
                 )
                 Spacer(modifier = Modifier.height(20.dp))
                 SectionRow(
@@ -222,7 +242,18 @@ fun PomodoroScreen(
                     selectedValue = restMinutes,
                     onSelect = { restMinutes = it },
                     onCustom = { customTarget = "rest"; showCustomDialog = true },
-                    enabled = !isRunning
+                    enabled = !isRunning,
+                    optionLabel = { stringResource(R.string.pomodoro_minutes_format, it) }
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                SectionRow(
+                    label = stringResource(R.string.pomodoro_cycles),
+                    options = cycleOptions,
+                    selectedValue = cycleCount,
+                    onSelect = { cycleCount = it },
+                    onCustom = { customTarget = "cycles"; showCustomDialog = true },
+                    enabled = !isRunning,
+                    optionLabel = { stringResource(R.string.pomodoro_cycles_format, it) }
                 )
             }
 
@@ -252,6 +283,7 @@ fun PomodoroScreen(
                                     action = PomodoroService.ACTION_START
                                     putExtra(PomodoroService.EXTRA_FOCUS_MIN, focusMinutes)
                                     putExtra(PomodoroService.EXTRA_REST_MIN, restMinutes)
+                                    putExtra(PomodoroService.EXTRA_CYCLES, cycleCount)
                                 }
                                 ContextCompat.startForegroundService(context, svcIntent)
                             } catch (e: Exception) {
@@ -270,15 +302,8 @@ fun PomodoroScreen(
                         }
                     },
                     onStop = {
-                        val elapsed = if (isFocusPhase) {
-                            focusMinutes - (remainingSeconds + 59) / 60
-                        } else {
-                            restMinutes - (remainingSeconds + 59) / 60
-                        }
-                        val category = if (isFocusPhase) TimeCategory.INVESTMENT else TimeCategory.FIXED
-                        if (elapsed >= 3) {
-                            onSaveRecord(category, elapsed)
-                        }
+                        // Elapsed time is persisted by PomodoroService (works
+                        // even when the UI is not composed); UI just resets.
                         vibe(vibrator, longArrayOf(0, 100, 100, 100))
                         context.sendBroadcast(
                             android.content.Intent(PomodoroService.ACTION_STOP).setPackage(context.packageName)
@@ -293,7 +318,9 @@ fun PomodoroScreen(
         Column(
             modifier = modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                // 顶栏 overlay 悬浮在页面顶（不占位）：内容避让 状态栏 + 切换器高度（48dp）
+                .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                .padding(start = 16.dp, end = 16.dp, top = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Top section: focus & rest options
@@ -308,7 +335,8 @@ fun PomodoroScreen(
                     selectedValue = focusMinutes,
                     onSelect = { focusMinutes = it },
                     onCustom = { customTarget = "focus"; showCustomDialog = true },
-                    enabled = !isRunning
+                    enabled = !isRunning,
+                    optionLabel = { stringResource(R.string.pomodoro_minutes_format, it) }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 SectionRow(
@@ -317,7 +345,18 @@ fun PomodoroScreen(
                     selectedValue = restMinutes,
                     onSelect = { restMinutes = it },
                     onCustom = { customTarget = "rest"; showCustomDialog = true },
-                    enabled = !isRunning
+                    enabled = !isRunning,
+                    optionLabel = { stringResource(R.string.pomodoro_minutes_format, it) }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                SectionRow(
+                    label = stringResource(R.string.pomodoro_cycles),
+                    options = cycleOptions,
+                    selectedValue = cycleCount,
+                    onSelect = { cycleCount = it },
+                    onCustom = { customTarget = "cycles"; showCustomDialog = true },
+                    enabled = !isRunning,
+                    optionLabel = { stringResource(R.string.pomodoro_cycles_format, it) }
                 )
             }
 
@@ -344,6 +383,7 @@ fun PomodoroScreen(
                                     action = PomodoroService.ACTION_START
                                     putExtra(PomodoroService.EXTRA_FOCUS_MIN, focusMinutes)
                                     putExtra(PomodoroService.EXTRA_REST_MIN, restMinutes)
+                                    putExtra(PomodoroService.EXTRA_CYCLES, cycleCount)
                                 }
                                 ContextCompat.startForegroundService(context, svcIntent)
                             } catch (e: Exception) {
@@ -362,15 +402,8 @@ fun PomodoroScreen(
                         }
                     },
                     onStop = {
-                        val elapsed = if (isFocusPhase) {
-                            focusMinutes - (remainingSeconds + 59) / 60
-                        } else {
-                            restMinutes - (remainingSeconds + 59) / 60
-                        }
-                        val category = if (isFocusPhase) TimeCategory.INVESTMENT else TimeCategory.FIXED
-                        if (elapsed >= 3) {
-                            onSaveRecord(category, elapsed)
-                        }
+                        // Elapsed time is persisted by PomodoroService (works
+                        // even when the UI is not composed); UI just resets.
                         vibe(vibrator, longArrayOf(0, 100, 100, 100))
                         context.sendBroadcast(
                             android.content.Intent(PomodoroService.ACTION_STOP).setPackage(context.packageName)
@@ -424,6 +457,7 @@ private fun TimerCircle(
                         text = String.format("%02d:%02d", mm, ss),
                         fontSize = 44.sp,
                         fontWeight = FontWeight.Light,
+                        fontFamily = FontFamily.Monospace,
                         color = textColor
                     )
                     val subLabel = if (isPaused) {
@@ -474,9 +508,17 @@ private fun SectionRow(
     selectedValue: Int,
     onSelect: (Int) -> Unit,
     onCustom: () -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    optionLabel: @Composable (Int) -> String
 ) {
     val isCustom = selectedValue !in options
+    // Freeze the last custom value: during the exit animation the selection
+    // has already moved back to a preset chip, so the label must keep showing
+    // the old custom value instead of flashing the newly selected preset.
+    var frozenValue by remember { mutableIntStateOf(selectedValue) }
+    if (isCustom) {
+        frozenValue = selectedValue
+    }
 
     Column {
         Text(
@@ -492,7 +534,7 @@ private fun SectionRow(
             options.forEach { minutes ->
                 val isSelected = selectedValue == minutes && !isCustom
                 ChipButton(
-                    label = stringResource(R.string.pomodoro_minutes_format, minutes),
+                    label = optionLabel(minutes),
                     selected = isSelected,
                     enabled = enabled,
                     onClick = { onSelect(minutes) },
@@ -507,14 +549,21 @@ private fun SectionRow(
                 modifier = Modifier.weight(1f)
             )
         }
-        if (isCustom) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.pomodoro_minutes_format, selectedValue),
-                fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 4.dp)
-            )
+        // 自定义值提示：出现/消失带过渡动画，避免自定义↔默认切换时布局跳变
+        AnimatedVisibility(
+            visible = isCustom,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = optionLabel(frozenValue),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
         }
     }
 }
@@ -559,20 +608,23 @@ private fun ChipButton(
 }
 
 @Composable
-private fun CustomMinutesDialog(
+private fun CustomValueDialog(
     title: String,
+    initialValue: Int = 20,
+    minValue: Int = 1,
+    maxValue: Int = 120,
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
-    var value by remember { mutableIntStateOf(20) }
+    var value by remember { mutableIntStateOf(initialValue) }
 
-    // 对齐 SportLink 定稿：经 DialogOverlay 注册到 MainScreen 宿主 slot（同窗口浮层），
-    // 外部 Haze scrim（20dp 模糊 + 25% 压暗）+ 内部 miuix 玻璃卡（10f + 高光 + tint 0.55）。
-    // 不再用 androidx Dialog 独立窗口 + 实心 Card（跨窗口无法同窗口采样，且原样无任何模糊）。
+    // 经 DialogOverlay 注册到 MainScreen 宿主 slot（同窗口浮层），
+    // 外部 Haze scrim（20dp 模糊 + 25% 压暗）+ 内部实心 tint 卡（miuixBlur=false，
+    // 浅色 White / 深色 #3A3A3A 不透明，无 miuix textureBlur 模糊）。
     // 宽度由 BlurredDialogScaffold 内部 dialogWidthAdaptive 统一（对齐 SportLink）。
     DialogOverlay {
         BackHandler { onDismiss() }
-        BlurredDialogScaffold(onDismissRequest = onDismiss) {
+        BlurredDialogScaffold(onDismissRequest = onDismiss, miuixBlur = false) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -590,18 +642,19 @@ private fun CustomMinutesDialog(
                 ) {
                     TextButton(
                         text = "−",
-                        onClick = { if (value > 1) value-- },
+                        onClick = { if (value > minValue) value-- },
                         colors = ButtonDefaults.textButtonColorsPrimary()
                     )
                     Text(
                         text = String.format("%02d", value),
                         fontSize = 48.sp,
+                        fontFamily = FontFamily.Monospace,
                         color = MiuixTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 24.dp)
                     )
                     TextButton(
                         text = "+",
-                        onClick = { if (value < 120) value++ },
+                        onClick = { if (value < maxValue) value++ },
                         colors = ButtonDefaults.textButtonColorsPrimary()
                     )
                 }

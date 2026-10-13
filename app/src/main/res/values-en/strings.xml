@@ -58,12 +58,17 @@
     <string name="calendar_day_mode">Day</string>
     <string name="calendar_month_mode">Month</string>
     <string name="calendar_week_mode">Week</string>
+    <string name="history_pomodoro_week_focus">Focus this week: %1$s</string>
+    <string name="history_pomodoro_week_rest">Rest this week: %1$s</string>
 
     <!-- Pomodoro -->
     <string name="pomodoro_focus">Focus</string>
     <string name="pomodoro_rest">Break</string>
     <string name="pomodoro_custom">Custom</string>
     <string name="pomodoro_custom_title">Set Duration</string>
+    <string name="pomodoro_cycles">Cycles</string>
+    <string name="pomodoro_custom_count_title">Set Cycles</string>
+    <string name="pomodoro_cycles_format">%d×</string>
     <string name="pomodoro_start">Start</string>
     <string name="pomodoro_pause">Pause</string>
     <string name="pomodoro_resume">Resume</string>
@@ -129,8 +134,12 @@
     <string name="settings_blur_title">Overlay Blur</string>
     <string name="settings_blur_level">Blur: %d</string>
 
+    <!-- Watch sync service -->
+    <string name="settings_watch_sync_title">Watch sync service</string>
+
     <!-- WebDAV extra -->
     <string name="webdav_no_backup">No backup found in the cloud</string>
+    <string name="webdav_no_local_data">No local data to back up</string>
 
     <!-- Calendar weekday headers (Sunday-first) -->
     <string-array name="weekday_short">

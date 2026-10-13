@@ -10,6 +10,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.zIndex
@@ -77,7 +78,6 @@ import com.example.timefriend.viewmodel.TimerEffect
 import com.example.timefriend.viewmodel.TimerViewModel
 import com.example.timefriend.viewmodel.WebDavViewModel
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDefaults
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -301,6 +301,7 @@ fun MainScreen(
                                 monthRecords = historyState.monthRecords,
                                 selectedDate = historyState.selectedDate,
                                 recordDates = historyState.recordDates,
+                                pomodoroWeek = historyViewModel.pomodoroWeek.collectAsState().value,
                                 onSelectDate = { historyViewModel.selectDate(it) },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -326,8 +327,11 @@ fun MainScreen(
                                     }
                                 }
                         ) {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                // 顶栏：今日/番茄钟 切换（内嵌于今日页顶部，随页面横滑、由其他页面覆盖）
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                // 顶栏：今日/番茄钟 切换器——overlay 悬浮在页面顶部（zIndex 保证
+                                // 绘制/命中在滚动内容之上），不再结构占位：内容区从页面顶开始
+                                //（含状态栏区域），滚动后内容可显示在状态栏区域
+                                //（对齐 sportlink 沉浸滚动语义）
                                 run {
                                     val topTabLabels = listOf(
                                         stringResource(R.string.top_today),
@@ -346,6 +350,8 @@ fun MainScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .align(Alignment.TopCenter)
+                                            .zIndex(1f)
                                             .windowInsetsPadding(WindowInsets.statusBars)
                                             .padding(top = 8.dp),
                                         contentAlignment = Alignment.Center
@@ -394,7 +400,26 @@ fun MainScreen(
                                     }
                                 }
                                 // Nested slide+fade: Today / Pomodoro（顶栏切换，与底栏切换同款滑动+淡化）
-                                Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                                // 内容区横向滑动亦可切换今日/番茄钟（与日历切月同款累计 80px 阈值；
+                                // topTab 为状态委托，手势闭包读取的恒为最新值）
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .pointerInput(Unit) {
+                                            var totalDrag = 0f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { totalDrag = 0f },
+                                                onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
+                                                onDragEnd = {
+                                                    if (totalDrag < -80f && topTab == 0) {
+                                                        topTab = 1
+                                                    } else if (totalDrag > 80f && topTab == 1) {
+                                                        topTab = 0
+                                                    }
+                                                }
+                                            )
+                                        }
+                                ) {
                                     val topContentAnim = remember { Animatable(if (topTab == 1) 1f else 0f) }
                                     var hasTopTabAnimated by remember { mutableStateOf(false) }
                                     LaunchedEffect(topTab) {
@@ -430,9 +455,6 @@ fun MainScreen(
                                             }
                                     ) {
                                         PomodoroScreen(
-                                            onSaveRecord = { category, minutes ->
-                                                timerViewModel.savePomodoroRecord(category, minutes)
-                                            },
                                             modifier = Modifier.fillMaxSize()
                                         )
                                     }
@@ -540,17 +562,20 @@ fun MainScreen(
             val pillHeight = 54.dp
             val pillAnim = remember { Animatable(0f) }
             val density = LocalDensity.current
-            val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
-            val horizontalPaddingPx = with(density) { FloatingNavigationBarDefaults.HorizontalOutSidePadding.toPx() }
-            LaunchedEffect(selectedIndex) {
-                val barWidthPx = screenWidthPx - horizontalPaddingPx * 2
+            // 底栏宽度 = 屏短边 × 90%、上限 600dp（对齐 sportlink FloatingTabWidth 口径）：
+            // 横竖屏等宽、不随长边拉长，平板/大屏封顶防过度变胖；水平居中由外层
+            // AnimatedVisibility(BottomCenter) 承担
+            val navBarWidth = FloatingNavBarWidth()
+            // navBarWidth 必须入 key：横竖屏切换后 bar 宽变化，effect 若不重启会按旧宽度
+            // 定位 pill → 错位（sportlink 2026-08-24 拖拽倍速同族坑）
+            LaunchedEffect(selectedIndex, navBarWidth) {
+                val barWidthPx = with(density) { navBarWidth.toPx() }
                 val itemWidthPx = barWidthPx / navItems.size
                 val targetPx = itemWidthPx * selectedIndex + with(density) { pillInset.toPx() }
                 pillAnim.animateTo(targetPx, animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f))
             }
             Box(
                 modifier = Modifier
-                    .padding(horizontal = FloatingNavigationBarDefaults.HorizontalOutSidePadding)
                     .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 8.dp)
                     .drawBackdrop(
                         backdrop = backdrop,
@@ -568,7 +593,7 @@ fun MainScreen(
                         navBarShape
                     )
                     .height(64.dp)
-                    .fillMaxWidth()
+                    .width(navBarWidth)
             ) {
                 // Sliding pill indicator
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -672,4 +697,16 @@ fun MainScreen(
         DialogOverlaySlot(dialogOverlayState)
     }
     }
+}
+
+/**
+ * 悬浮底栏宽度口径（对齐 sportlink FloatingTabWidth）：屏**短边** × 90%、上限 600dp。
+ * 横竖屏等宽（横屏短边 = 屏高 → 底栏不随长边拉长横跨全屏），平板/大屏封顶防过度变胖。
+ * 水平居中由外层 AnimatedVisibility(BottomCenter) 承担。
+ */
+@Composable
+private fun FloatingNavBarWidth(): Dp {
+    val configuration = LocalConfiguration.current
+    return (minOf(configuration.screenWidthDp, configuration.screenHeightDp).dp * 0.9f)
+        .coerceAtMost(600.dp)
 }

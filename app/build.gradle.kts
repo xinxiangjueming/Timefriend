@@ -13,13 +13,23 @@ android {
         minSdk = 33
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // 仅保留实际支持的语言资源（默认 values=简体中文 + 4 套翻译），
         // 裁掉依赖库（androidx/miuix 等）自带的其他 30+ 种语言
         resConfigs("en", "ja", "ko", "zh-rTW")
+    }
+
+    // 正式签名密钥库（项目根 timefriend，PKCS12，别名 key0；敏感文件勿入库）
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("timefriend")
+            storePassword = "1234567890"
+            keyAlias = "key0"
+            keyPassword = "1234567890"
+        }
     }
 
     buildTypes {
@@ -30,6 +40,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     splits {
@@ -74,6 +85,15 @@ dependencies {
 
     // Encrypted storage for WebDAV credentials
     implementation(libs.androidx.security.crypto)
+
+    // zstd-jni — Room 库文件备份压缩（Zstandard，压缩率优于 gzip/deflate）
+    implementation("com.github.luben:zstd-jni:1.5.7-19@aar")
+
+    // 小米 Vela interconnect（LiFD）手机端 SDK（xms-wearable）。
+    // AAR 由官方 Vela 文档站 interconnect 页面的 interconnect_dev_test_demo.zip 提供，
+    // 解压后把 xms-wearable-lib_1.4_release.aar 放到 app/libs/ 下（见 app/libs/README.md）。
+    // AAR 自带 consumer proguard 规则，开启 minify 无需额外 keep。
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
 
     // Room database
     implementation(libs.androidx.room.runtime)

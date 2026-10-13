@@ -58,12 +58,17 @@
     <string name="calendar_day_mode">日</string>
     <string name="calendar_month_mode">月</string>
     <string name="calendar_week_mode">週</string>
+    <string name="history_pomodoro_week_focus">今週の投入時間：%1$s</string>
+    <string name="history_pomodoro_week_rest">今週の休憩時間：%1$s</string>
 
     <!-- Pomodoro -->
     <string name="pomodoro_focus">集中</string>
     <string name="pomodoro_rest">休憩</string>
     <string name="pomodoro_custom">カスタム</string>
     <string name="pomodoro_custom_title">時間を設定</string>
+    <string name="pomodoro_cycles">繰り返し回数</string>
+    <string name="pomodoro_custom_count_title">回数を設定</string>
+    <string name="pomodoro_cycles_format">%d回</string>
     <string name="pomodoro_start">開始</string>
     <string name="pomodoro_pause">一時停止</string>
     <string name="pomodoro_resume">再開</string>
@@ -129,8 +134,12 @@
     <string name="settings_blur_title">オーバーレイのぼかし</string>
     <string name="settings_blur_level">ぼかし：%d</string>
 
+    <!-- ウォッチ同期サービス -->
+    <string name="settings_watch_sync_title">ウォッチ同期サービス</string>
+
     <!-- WebDAV extra -->
     <string name="webdav_no_backup">クラウドにバックアップがありません</string>
+    <string name="webdav_no_local_data">バックアップするローカルデータがありません</string>
 
     <!-- カレンダーの曜日見出し（日曜始まり） -->
     <string-array name="weekday_short">

@@ -19,6 +19,13 @@ data class TimerUiState(
     val sleepDurationMinutes: Int = 0           // manually entered sleep minutes
 )
 
+/** One day of aggregated pomodoro time (sum of session rows for that date). */
+data class DailyPomodoro(
+    val date: String,           // yyyy-MM-dd
+    val focusMinutes: Int,      // total focus (investment) minutes
+    val restMinutes: Int        // total rest (break) minutes
+)
+
 /** History data state (owned by HistoryViewModel, auto-refreshed via Room flows). */
 data class HistoryUiState(
     val selectedDate: String = "",              // yyyy-MM-dd for history

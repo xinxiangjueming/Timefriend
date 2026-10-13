@@ -61,7 +61,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 与 Haze 真模糊（RenderEffect API 31+）恒可用，故无 API<33 实心卡降级、无
  * FLAG_BLUR_BEHIND 独立窗口兜底分支。首页 backdrop 因导航栏/Toast 常驻消费而
  * 常驻录制（不同于 SportLink 的仅弹窗活跃挂载）；Haze 源按 openCount 条件挂载，
- * 避免整屏 Haze 采样常驻消耗 GPU。
+ * 避免整屏 Haze 采样常驻消耗 GPU。今日/番茄钟页弹窗（SleepInputDialog /
+ * CustomValueDialog）经 miuixBlur=false 选用实心 tint 卡，不走内部 miuix 模糊；
+ * 其余弹窗（如历史页 MonthYearPickerDialog）维持玻璃卡默认值。
  */
 
 /** 弹窗玻璃卡模糊半径（dp，对齐 SportLink 2026-09-01 定稿 10f） */
@@ -192,31 +194,47 @@ fun DialogOverlaySlot(state: DialogOverlayState) {
 }
 
 /**
- * 弹窗玻璃卡统一视觉（miuix textureBlur 10f + 高光描边 + tint 0.55 + 1dp 实色描边）。
+ * 弹窗卡片统一视觉。
+ *
+ * 玻璃卡模式（miuixBlur = true，默认）：miuix textureBlur 10f + 高光描边 + tint 0.55
+ * + 1dp 实色描边。
+ * 实心卡模式（miuixBlur = false，今日/番茄钟页弹窗）：去除卡片内部 miuix 模糊与高光
+ * 描边，tint 改为不透明实色（浅色 White / 深色 #3A3A3A，对齐 SportLink DialogBg 实底），
+ * 避免半透明卡透出外部 Haze scrim 导致对比度下降；1dp 描边/阴影/进入动画保留。
  *
  * 链序铁律（对齐 SportLink）：外层 clip 必须在 textureBlur 之前（Miuix 模糊层是
  * 节点边界+padding 矩形，不随 shape 裁剪）；点击拦截放最后。
  *
- * @param shape 弹窗 shape（RoundedCornerShape(GlobalCornerRadius)）
+ * @param shape    卡片 shape（RoundedCornerShape(GlobalCornerRadius)）
+ * @param miuixBlur 是否启用卡片内部 miuix textureBlur 玻璃模糊（默认 true；
+ *                  false = 不透明实心 tint 卡）
  */
 @Composable
 fun Modifier.dialogGlassCard(
     state: DialogOverlayState,
     shape: Shape,
+    miuixBlur: Boolean = true,
 ): Modifier {
     val isDark = isSystemInDarkTheme()
+    val tintColor = if (isDark) DialogGlassTintColorDark else DialogGlassTintColorLight
     return this
         .clip(shape)
-        .textureBlur(
-            state.backdrop, shape,
-            blurRadius = DialogGlassBlurRadius,
-            // 玻璃边缘高光（miuix Highlight，加粗带宽版 Middle 预设）
-            highlight = if (isDark) DialogGlassHighlightDark else DialogGlassHighlightLight,
+        .then(
+            if (miuixBlur) {
+                Modifier.textureBlur(
+                    state.backdrop, shape,
+                    blurRadius = DialogGlassBlurRadius,
+                    // 玻璃边缘高光（miuix Highlight，加粗带宽版 Middle 预设）
+                    highlight = if (isDark) DialogGlassHighlightDark else DialogGlassHighlightLight,
+                )
+            } else {
+                Modifier
+            }
         )
-        // 半透明 tint（叠加在模糊之上，深浅色自适应对比度；底色对齐 SportLink DialogBg）
         .background(
-            (if (isDark) DialogGlassTintColorDark else DialogGlassTintColorLight)
-                .copy(alpha = DialogGlassTintAlpha)
+            // 玻璃模式：半透明 tint 叠加在 miuix 模糊之上；实心模式：tint 不透明
+            // （透出外部 Haze scrim 会显脏且对比度下降）。底色均对齐 SportLink DialogBg。
+            if (miuixBlur) tintColor.copy(alpha = DialogGlassTintAlpha) else tintColor
         )
         .border(
             width = DialogGlassBorderWidth,
@@ -285,25 +303,29 @@ fun Modifier.dialogCardShadow(shape: Shape): Modifier =
 
 /**
  * 弹窗统一脚手架：全屏 scrim（外部 Haze 20dp 模糊 + 25% 压暗 + 点击外部关闭）
- * + 居中玻璃卡（miuix textureBlur 10f + 高光描边 + tint 0.55 + 1dp 实色描边 + 进入动画 + 阴影）。
+ * + 居中卡片（默认玻璃卡：miuix textureBlur 10f + 高光描边 + tint 0.55 + 1dp 实色描边
+ * + 进入动画 + 阴影；miuixBlur=false 时为不透明实心 tint 卡，无内部 miuix 模糊）。
  *
  * 卡片链序逐字对齐 SportLink BlurredAlertDialog：
  * dialogWidthAdaptive → dialogEnterAnim → dialogCardShadow → clip → textureBlur → tint → border → 点击拦截。
  * 宽度由 [dialogWidthAdaptive] 统一约束（横屏 60%/低DPI 95%/默认 90% 屏宽），调用方无需传宽度。
  *
- * 结构：scrim 为父、玻璃卡为子，卡片空点击拦截在 [dialogGlassCard] 内（防卡片内空白
+ * 结构：scrim 为父、卡片为子，卡片空点击拦截在 [dialogGlassCard] 内（防卡片内空白
  * 点击冒泡到 scrim 误关闭）。调用方须把本组件包在 [DialogOverlay] 内（宿主 slot 处
  * 渲染，与采样源同窗口兄弟）。无宿主降级：纯压暗 scrim + 实心卡，不崩溃。
  *
- * @param modifier 卡片额外约束（可选）
- * @param shape    卡片 shape（默认全局圆角）
- * @param content  卡片内容（自带 padding）
+ * @param modifier  卡片额外约束（可选）
+ * @param shape     卡片 shape（默认全局圆角）
+ * @param miuixBlur 是否启用卡片内部 miuix textureBlur 玻璃模糊（默认 true；
+ *                  false = 不透明实心 tint 卡，用于今日/番茄钟页弹窗）
+ * @param content   卡片内容（自带 padding）
  */
 @Composable
 fun BlurredDialogScaffold(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(GlobalCornerRadius),
+    miuixBlur: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val state = LocalDialogOverlay.current
@@ -324,7 +346,7 @@ fun BlurredDialogScaffold(
                 .dialogEnterAnim()
                 .dialogCardShadow(shape)
                 .then(
-                    if (state != null) Modifier.dialogGlassCard(state, shape)
+                    if (state != null) Modifier.dialogGlassCard(state, shape, miuixBlur)
                     else Modifier.background(MiuixTheme.colorScheme.surfaceContainerHigh, shape)
                 ),
         ) {

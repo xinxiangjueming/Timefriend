@@ -1,5 +1,6 @@
 package com.example.timefriend.ui.screen
 
+import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -20,11 +21,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,14 +63,35 @@ import com.example.timefriend.data.TimeRecord
 import com.example.timefriend.ui.component.DayPieChart
 import com.example.timefriend.ui.component.MonthYearPickerDialog
 import com.example.timefriend.ui.component.PieChartLegend
+import com.example.timefriend.ui.component.PomodoroWeekChart
 import com.example.timefriend.ui.theme.GlobalCornerRadius
+import com.example.timefriend.viewmodel.DailyPomodoro
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+
+// ── 底部卡片 Pager 无限循环常量（对齐 sportlink RunningDistanceCard.MILE_CARD_*）──
+// HorizontalPager 原生不支持循环：伪造大 pageCount + 内容按 page % 真实页数映射，
+// 初始页取 4 对齐的中心值（直接用 Int.MAX_VALUE/2 会错落到奇数页，sportlink 同款历史坑），
+// 两侧都有页可滑，用户实际滑不到 0 / Int.MAX_VALUE 边界。
+private const val SUMMARY_PAGE_COUNT = 2
+private const val SUMMARY_PAGER_TOTAL = Int.MAX_VALUE
+private val SUMMARY_PAGER_CENTER =
+    (SUMMARY_PAGER_TOTAL / 2) / SUMMARY_PAGE_COUNT * SUMMARY_PAGE_COUNT
+
+/** 把"真实页索引 realPage (0..1)"映射到无限循环伪 Pager 上、靠近中心且同余的伪造页索引。 */
+private fun summaryFakePageFor(realPage: Int): Int {
+    val r = (realPage % SUMMARY_PAGE_COUNT + SUMMARY_PAGE_COUNT) % SUMMARY_PAGE_COUNT
+    return SUMMARY_PAGER_CENTER + r
+}
 
 @Composable
 fun HistoryScreen(
@@ -78,6 +100,7 @@ fun HistoryScreen(
     monthRecords: List<TimeRecord>,
     selectedDate: String,
     recordDates: Set<String>,
+    pomodoroWeek: List<DailyPomodoro>,
     onSelectDate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -107,114 +130,237 @@ fun HistoryScreen(
         else -> stringResource(R.string.history_month_total)
     }
 
-    val pieContent = @Composable {
+    // —— 底部卡片区：左右滑动双页（饼图总结 / 番茄钟周统计）——
+    // 无限循环 + 页码落盘记忆（对齐 sportlink RunningDistanceCard + HistoryPrefs）：
+    // 进页恢复上次停留的真实页；滑动到新页时落盘，下次进入恢复。
+    val context = LocalContext.current
+    val pagePrefs = remember {
+        context.getSharedPreferences("history_prefs", Context.MODE_PRIVATE)
+    }
+    val pagerState = rememberPagerState(
+        initialPage = summaryFakePageFor(pagePrefs.getInt("summary_card_page", 0))
+    ) { SUMMARY_PAGER_TOTAL }
+    val pagerScope = rememberCoroutineScope()
+    LaunchedEffect(pagerState.currentPage) {
+        pagePrefs.edit()
+            .putInt("summary_card_page", pagerState.currentPage % SUMMARY_PAGE_COUNT)
+            .apply()
+    }
+
+    // 饼图页内容：不再自带 Card / 内部 verticalScroll（对齐 sportlink 各页设计——
+    // 页内容 weight 弹性自适应 Pager 高度、无内部滚动）。内部滚动会在内容超出等高约束时
+    // 抢走纵向滑动手势（卡内小幅滚动、整页不动），是竖屏"上滑看底部卡片"失效的根因之一；
+    // 改为自适应后，纵向手势恒直达根滚动容器（整页上移）。
+    val piePage = @Composable {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Day/Week/Month toggle with sliding pill
+            val chipLabels = listOf(
+                stringResource(R.string.calendar_day_mode),
+                stringResource(R.string.calendar_week_mode),
+                stringResource(R.string.calendar_month_mode)
+            )
+            val chipAnim = remember { androidx.compose.animation.core.Animatable(0f) }
+            val chipDensity = androidx.compose.ui.platform.LocalDensity.current
+            LaunchedEffect(pieMode) {
+                val containerWidthPx = with(chipDensity) { 200.dp.toPx() }
+                val chipWidthPx = containerWidthPx / chipLabels.size
+                chipAnim.animateTo(
+                    chipWidthPx * pieMode,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = 0.7f, stiffness = 400f
+                    )
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(GlobalCornerRadius))
+                    // 容器底色用 onSurface 8% 叠加：深色下比卡片底浅、浅色下比卡片底深，
+                    // 恒与背景可区分（原 surfaceContainerHigh 深色 #242424 与卡片 #222222 几乎同色）
+                    .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    .padding(4.dp)
+                    .width(200.dp)
+            ) {
+                // Pill
+                val pillWidthFraction = 1f / chipLabels.size
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(pillWidthFraction)
+                        .height(32.dp)
+                        .offset { androidx.compose.ui.unit.IntOffset(chipAnim.value.toInt(), 0) }
+                        .align(Alignment.CenterStart)
+                        .clip(RoundedCornerShape(GlobalCornerRadius))
+                        .background(MiuixTheme.colorScheme.primary)
+                )
+                // Labels
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    chipLabels.forEachIndexed { index, label ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) { pieMode = index }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 13.sp,
+                                fontWeight = if (pieMode == index) FontWeight.Bold else FontWeight.Normal,
+                                color = if (pieMode == index) MiuixTheme.colorScheme.onPrimary
+                                        else MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (pieRecords.isNotEmpty()) {
+                // 饼图弹性自适应：weight 分得剩余高度，aspectRatio 取宽高中较小值成正方形
+                //（替代原固定 180dp + 内部 verticalScroll 兜底——等高约束变矮时内容自动收缩）
+                DayPieChart(
+                    records = pieRecords,
+                    strokeWidth = 22.dp,
+                    modifier = Modifier.weight(1f).aspectRatio(1f)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                PieChartLegend(records = pieRecords)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = when (pieMode) {
+                            0 -> stringResource(R.string.history_no_records)
+                            1 -> stringResource(R.string.history_no_records_week)
+                            else -> stringResource(R.string.history_no_records_month)
+                        },
+                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        fontSize = 16.sp
+                    )
+                }
+            }
+        }
+    }
+
+    // 番茄钟周统计页：柱状图（左蓝=投入、右红=休息，最近 7 天）+ 底部两行汇总
+    //（同饼图页：去 Card 包裹，由外层统一卡片容器承载；柱图 weight 弹性自适应、无内部滚动）
+    val pomodoroPage = @Composable {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            PomodoroWeekChart(
+                days = pomodoroWeek,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val focusTotal = pomodoroWeek.sumOf { it.focusMinutes }
+            val restTotal = pomodoroWeek.sumOf { it.restMinutes }
+            val focusText =
+                if (focusTotal >= 60) stringResource(R.string.duration_hours_minutes, focusTotal / 60, focusTotal % 60)
+                else stringResource(R.string.duration_minutes, focusTotal)
+            val restText =
+                if (restTotal >= 60) stringResource(R.string.duration_hours_minutes, restTotal / 60, restTotal % 60)
+                else stringResource(R.string.duration_minutes, restTotal)
+
+            Text(
+                text = stringResource(R.string.history_pomodoro_week_focus, focusText),
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.history_pomodoro_week_rest, restText),
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+        }
+    }
+
+    // 底部卡片容器（对齐 sportlink RunningDistanceCard 结构）：单卡承载 Pager + 卡内页指示点，
+    // 卡高 = 日历卡实测高度（等高机制不变）。首帧 heightIn 限高兜底不可省：
+    // 竖屏根 Column / 横屏右列的 verticalScroll 会向下传递无限最大高度，直接 wrap 会把
+    // 无限高灌进 Pager（2026-10-13 冷启动 "infinity maximum height constraints" 实测崩溃，
+    // adb logcat 完整栈确认）；heightIn(max) 夹成有界值，日历卡实测上报后切精确等高。
+    val summaryCard = @Composable {
         Card(
             cornerRadius = GlobalCornerRadius,
             colors = CardDefaults.defaultColors(),
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    // 高度 = 日历卡实测高度（对齐 sportlink：两卡片底边恒平齐，切月不变）；
-                    // 首帧 calendarHeightPx==0 时 wrap 兜底
                     if (calendarHeightPx > 0f) {
                         Modifier.height((calendarHeightPx / density).dp)
                     } else {
-                        Modifier
+                        Modifier.heightIn(max = 400.dp)
                     }
                 )
         ) {
             Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    // 内容（切换器+饼图+图例）可能超出等高约束 → 滚动兜底防裁剪
-                    .verticalScroll(rememberScrollState()),
+                modifier = Modifier.padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Day/Week/Month toggle with sliding pill
-                val chipLabels = listOf(
-                    stringResource(R.string.calendar_day_mode),
-                    stringResource(R.string.calendar_week_mode),
-                    stringResource(R.string.calendar_month_mode)
-                )
-                val chipAnim = remember { androidx.compose.animation.core.Animatable(0f) }
-                val chipDensity = androidx.compose.ui.platform.LocalDensity.current
-                LaunchedEffect(pieMode) {
-                    val containerWidthPx = with(chipDensity) { 200.dp.toPx() }
-                    val chipWidthPx = containerWidthPx / chipLabels.size
-                    chipAnim.animateTo(
-                        chipWidthPx * pieMode,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = 0.7f, stiffness = 400f
-                        )
-                    )
-                }
-                Box(
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(GlobalCornerRadius))
-                        // 容器底色用 onSurface 8% 叠加：深色下比卡片底浅、浅色下比卡片底深，
-                        // 恒与背景可区分（原 surfaceContainerHigh 深色 #242424 与卡片 #222222 几乎同色）
-                        .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                        .padding(4.dp)
-                        .width(200.dp)
-                ) {
-                    // Pill
-                    val pillWidthFraction = 1f / chipLabels.size
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(pillWidthFraction)
-                            .height(32.dp)
-                            .offset { androidx.compose.ui.unit.IntOffset(chipAnim.value.toInt(), 0) }
-                            .align(Alignment.CenterStart)
-                            .clip(RoundedCornerShape(GlobalCornerRadius))
-                            .background(MiuixTheme.colorScheme.primary)
-                    )
-                    // Labels
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        chipLabels.forEachIndexed { index, label ->
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) { page ->
+                    if (page % SUMMARY_PAGE_COUNT == 0) piePage() else pomodoroPage()
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 页指示点：保留 Timefriend 的可点击跳页（sportlink PagerDots 为纯指示）；
+                // 伪页大数下相对定位到当前页附近同余页（sportlink 深链定位同款偏移算法）
+                Row(horizontalArrangement = Arrangement.Center) {
+                    repeat(SUMMARY_PAGE_COUNT) { index ->
+                        val selected = pagerState.currentPage % SUMMARY_PAGE_COUNT == index
+                        Box(
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    val current = pagerState.currentPage
+                                    val offset = (index - (current % SUMMARY_PAGE_COUNT) +
+                                        SUMMARY_PAGE_COUNT) % SUMMARY_PAGE_COUNT
+                                    pagerScope.launch {
+                                        pagerState.animateScrollToPage(current + offset)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .clickable(
-                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                        indication = null
-                                    ) { pieMode = index }
-                                    .padding(vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (pieMode == index) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (pieMode == index) MiuixTheme.colorScheme.onPrimary
-                                            else MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = 0.4f)
-                                )
-                            }
+                                    .size(if (selected) 6.dp else 5.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (selected) MiuixTheme.colorScheme.primary
+                                        else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                                    )
+                            )
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (pieRecords.isNotEmpty()) {
-                    DayPieChart(records = pieRecords, size = 180.dp, strokeWidth = 22.dp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    PieChartLegend(records = pieRecords)
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = when (pieMode) {
-                                0 -> stringResource(R.string.history_no_records)
-                                1 -> stringResource(R.string.history_no_records_week)
-                                else -> stringResource(R.string.history_no_records_month)
-                            },
-                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                            fontSize = 16.sp
-                        )
                     }
                 }
             }
@@ -222,50 +368,48 @@ fun HistoryScreen(
     }
 
     if (isLandscape) {
-        Row(
+        Column(
             modifier = modifier
                 .fillMaxSize()
-                // 横屏:左侧避状态栏条、右侧避手势导航条(挖孔/侧边手势条均含于 safeDrawing)
+                // 横屏与竖屏同构（对齐 sportlink HistoryScreen）：整页一个滚动容器，
+                // Row 内两卡为自然高度/等高（**不用 fillMaxHeight 撑满**），内容超高时整页滚动；
+                // inset 属于滚动内容 → 滚动后整页（含卡片）可显示在状态栏区域
+                .verticalScroll(rememberScrollState())
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                 .padding(start = 16.dp, end = 16.dp, top = 8.dp)
         ) {
-            Card(
-                cornerRadius = GlobalCornerRadius,
-                colors = CardDefaults.defaultColors(),
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .onGloballyPositioned { calendarHeightPx = it.size.height.toFloat() }
-                    .padding(end = 8.dp)
-            ) {
-                Box(
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    cornerRadius = GlobalCornerRadius,
+                    colors = CardDefaults.defaultColors(),
                     modifier = Modifier
-                        .padding(12.dp)
-                        .verticalScroll(rememberScrollState())
+                        .weight(1f)
+                        .onGloballyPositioned { calendarHeightPx = it.size.height.toFloat() }
                 ) {
-                    calendarContent()
+                    Box(modifier = Modifier.padding(12.dp)) {
+                        calendarContent()
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Box(modifier = Modifier.weight(1f)) {
+                    summaryCard()
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top
-            ) {
-                pieContent()
-            }
+            // 底部避让悬浮导航栏（对齐 sportlink 横屏整页预留 120dp）
+            Spacer(modifier = Modifier.height(120.dp))
         }
     } else {
         Column(
             modifier = modifier
                 .fillMaxSize()
-                // 竖屏:顶部避状态栏(顶栏隐藏时防止内容被遮挡),左右挖孔由 safeDrawing.Horizontal 兼容
+                // 小屏兜底：日历 + 等高卡片 + 指示点可能超一屏。
+                // verticalScroll 必须在 insets padding 之前（inset 属于滚动内容）：滚动后
+                // 内容可显示在状态栏区域（对齐 sportlink 沉浸滚动语义）；若 insets 在
+                // scroll 之外，视口顶边落在状态栏下缘 → 内容滚到顶即被裁切
+                .verticalScroll(rememberScrollState())
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                 .padding(start = 16.dp, end = 16.dp, top = 8.dp)
         ) {
@@ -283,7 +427,13 @@ fun HistoryScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            pieContent()
+            summaryCard()
+
+            // 底部避让悬浮导航栏（64dp 本体 + 底部 inset + 8dp 边距 ≈ 100dp；对齐 sportlink
+            // 底部 Spacer(120dp) 同款预留）：保证根滚动容器恒有滚动行程——竖屏"上滑把底部
+            // 卡片/指示点滚出导航栏遮挡区"的关键。无此 Spacer 时内容总高（日历+等高卡片+
+            // 指示点）≈ 视口高度，滚动余量≈0，上滑无响应且卡片底部被悬浮导航栏盖住。
+            Spacer(modifier = Modifier.height(120.dp))
         }
     }
 }

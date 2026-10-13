@@ -31,3 +31,8 @@
 
 # Google Tink (used by security-crypto / EncryptedSharedPreferences)
 -dontwarn com.google.errorprone.annotations.**
+
+# 小米 Vela interconnect 手机端 SDK（xms-wearable）。
+# AAR 自带 consumer proguard 规则，但显式 keep 本工程接收器，避免 R8 误删入口类。
+-keep class com.example.timefriend.wearable.** { *; }
+-dontwarn com.xiaomi.xms.wearable.**

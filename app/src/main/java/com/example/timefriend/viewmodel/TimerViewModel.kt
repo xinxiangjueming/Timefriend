@@ -118,15 +118,4 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         _ui.value = _ui.value.copy(sleepDurationMinutes = minutes)
         viewModelScope.launch { repo.replaceRecord(record) }
     }
-
-    fun savePomodoroRecord(category: TimeCategory, minutes: Int) {
-        val now = System.currentTimeMillis()
-        val record = TimeRecord(
-            category = category,
-            startTime = now - minutes * 60_000L,
-            endTime = now,
-            date = repo.todayDateString()
-        )
-        viewModelScope.launch { repo.saveRecord(record) }
-    }
 }

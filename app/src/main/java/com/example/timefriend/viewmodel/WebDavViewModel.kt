@@ -3,6 +3,7 @@ package com.example.timefriend.viewmodel
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -115,18 +116,30 @@ class WebDavViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = s.copy(syncStatus = SyncStatus.LOADING, syncMessage = null)
         viewModelScope.launch {
             try {
-                val json = repo.exportAllJson()
-                val helper = WebDavHelper(
-                    s.webDavServer, s.webDavUsername, s.webDavPassword,
-                    WebDavHelper.REMOTE_FILE_PATH, container.okHttpClient
-                )
-                helper.ensureDirectory() // 自动在云端创建 Timefriend 目录（幂等）
-                helper.upload(json)
-                _state.value = _state.value.copy(
-                    syncStatus = SyncStatus.SUCCESS,
-                    syncMessage = ctx.getString(R.string.webdav_backup_success)
-                )
-                // History refresh is automatic via Room flows.
+                // 空库保护：本地无任何记录则不覆盖云端
+                if (repo.isEmpty()) {
+                    _state.value = _state.value.copy(
+                        syncStatus = SyncStatus.ERROR,
+                        syncMessage = ctx.getString(R.string.webdav_no_local_data)
+                    )
+                    return@launch
+                }
+                val zst = repo.backupRoomDb()
+                try {
+                    val helper = WebDavHelper(
+                        s.webDavServer, s.webDavUsername, s.webDavPassword,
+                        WebDavHelper.REMOTE_DB_RELPATH, container.okHttpClient
+                    )
+                    helper.ensureDirectory() // 自动在云端创建 Timefriend 目录（幂等）
+                    helper.uploadFile(WebDavHelper.REMOTE_DB_RELPATH, zst)
+                    _state.value = _state.value.copy(
+                        syncStatus = SyncStatus.SUCCESS,
+                        syncMessage = ctx.getString(R.string.webdav_backup_success)
+                    )
+                    // History refresh is automatic via Room flows.
+                } finally {
+                    zst.delete()
+                }
             } catch (e: WebDavException) {
                 _state.value = _state.value.copy(syncStatus = SyncStatus.ERROR, syncMessage = webDavErrorMessage(e))
             } catch (e: Exception) {
@@ -147,14 +160,33 @@ class WebDavViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = s.copy(syncStatus = SyncStatus.LOADING, syncMessage = null)
         viewModelScope.launch {
             try {
+                // 1) 优先从 zstd 压缩库恢复（整体下载 + 按主键并入，只补缺不覆盖）
+                val dbHelper = WebDavHelper(
+                    s.webDavServer, s.webDavUsername, s.webDavPassword,
+                    WebDavHelper.REMOTE_DB_RELPATH, container.okHttpClient
+                )
+                val zst = File(ctx.cacheDir, "timefriend_restore.db.zst")
+                if (dbHelper.downloadFile(WebDavHelper.REMOTE_DB_RELPATH, zst)) {
+                    try {
+                        repo.restoreRoomDbFrom(zst)
+                        _state.value = _state.value.copy(
+                            syncStatus = SyncStatus.SUCCESS,
+                            syncMessage = ctx.getString(R.string.webdav_sync_success)
+                        )
+                    } finally {
+                        zst.delete()
+                    }
+                    return@launch
+                }
+                // 2) 兼容回退：老用户的旧版 JSON 备份
                 val helper = WebDavHelper(
                     s.webDavServer, s.webDavUsername, s.webDavPassword,
                     WebDavHelper.REMOTE_FILE_PATH, container.okHttpClient
                 )
-                var json = helper.download() // 1) 新固定路径
+                var json = helper.download() // 新固定路径
                 val legacy = legacyWebDavPath
                 if (json == null && !legacy.isNullOrBlank() && legacy != WebDavHelper.REMOTE_FILE_PATH) {
-                    // 2) 兼容回退：老用户旧版自定义路径
+                    // 老用户旧版自定义路径
                     json = WebDavHelper(s.webDavServer, s.webDavUsername, s.webDavPassword, legacy, container.okHttpClient)
                         .download()
                 }
