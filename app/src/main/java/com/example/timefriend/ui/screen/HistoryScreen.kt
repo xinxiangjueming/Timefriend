@@ -281,17 +281,25 @@ fun HistoryScreen(
                 if (restTotal >= 60) stringResource(R.string.duration_hours_minutes, restTotal / 60, restTotal % 60)
                 else stringResource(R.string.duration_minutes, restTotal)
 
-            Text(
-                text = stringResource(R.string.history_pomodoro_week_focus, focusText),
-                fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.history_pomodoro_week_rest, restText),
-                fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface
-            )
+            // 两行汇总「整体居中 + 块内左对齐」：外父 Column 是 CenterHorizontally，
+            // 直接放两个 Text 会各自按自身内容宽居中、起始 x 参差；这里包一层 wrapContent
+            //（不 fillMaxWidth，宽度取两行中较宽者）+ Start 对齐的 Column：
+            // 整块被父居中，块内两行左边缘对齐。
+            Column(
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = stringResource(R.string.history_pomodoro_week_focus, focusText),
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.history_pomodoro_week_rest, restText),
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 
