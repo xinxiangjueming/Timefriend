@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
 import java.io.File
+import com.example.timefriend.data.TimeCategory
 import com.example.timefriend.data.db.AppDatabase
 import com.example.timefriend.data.db.PomodoroSessionEntity
 import com.example.timefriend.data.db.TimeRecordDao
@@ -140,14 +141,96 @@ class TimeRepository(
      * 幂等写入手表（Vela interconnect）同步来的番茄钟周期。
      * 按 (date|createdAt|focusMinutes|restMinutes) 去重，重复同步不会产生重复行；
      * 每个手表周期的 [PomodoroSessionEntity.createdAt] 是完成时刻的稳定时间戳，天然幂等键。
+     *
+     * 同时派生 INVESTMENT/FIXED 两条 [TimeRecord]（对齐 [com.example.timefriend.service.
+     * PomodoroService.recordFocus/recordRest] 的本地行为）：柱状图吃 pomodoro_sessions、
+     * 总结饼图吃 records，只写前者会导致手表同步的数据永远进不了总结图
+     * （2026-10-14 用户反馈）。派生带重叠守卫（见 [deriveMissingPomodoroRecords]），
+     * 重复同步与本地周期均不会重复计。
+     *
+     * @return 实际新插入的周期行数（供同步回执携带）
      */
-    suspend fun upsertWatchPomodoroSessions(sessions: List<PomodoroSessionEntity>) {
-        if (sessions.isEmpty()) return
-        db.withTransaction {
+    suspend fun upsertWatchPomodoroSessions(sessions: List<PomodoroSessionEntity>): Int {
+        if (sessions.isEmpty()) return 0
+        return db.withTransaction {
             val existing = pomodoroDao.getAll().map { pomKey(it) }.toSet()
             val toInsert = sessions.filter { pomKey(it) !in existing }
             if (toInsert.isNotEmpty()) pomodoroDao.insertAll(toInsert)
+            deriveMissingPomodoroRecords(sessions)
+            toInsert.size
         }
+    }
+
+    /**
+     * 冷启动补齐（2026-10-14）：修复版发布前同步的存量周期只落了 pomodoro_sessions、
+     * 没派生时间记录 → 柱状图有数据、总结饼图空缺。App 启动时对全部周期重跑派生。
+     * 重叠守卫保证幂等与安全：
+     *  - 手表周期（无任何记录）→ 派生窗口与已有同类别记录不重叠 → 插入；
+     *  - 手机本地周期（PomodoroService 已写记录，结束时刻 = createdAt）→ 自身记录
+     *    与派生窗口重叠 → 跳过，不会重复计；
+     *  - 已派生过的手表周期 → 精确同窗口记录存在（重叠）→ 跳过。
+     */
+    suspend fun backfillPomodoroTimeRecords() {
+        val sessions = pomodoroDao.getAll()
+        if (sessions.isEmpty()) return
+        db.withTransaction { deriveMissingPomodoroRecords(sessions) }
+    }
+
+    /**
+     * 从番茄钟周期派生缺失的 INVESTMENT/FIXED 时间记录（同事务调用）。
+     * 时间轴：createdAt = 周期（专注+休息）完成时刻；休息 = [createdAt-rest, createdAt]，
+     * 专注紧随休息前 = [focusEnd-focus, focusEnd]，focusEnd = createdAt-rest。
+     * 守卫：同日期同类别已有记录与派生窗口 [start,end) 重叠即跳过（幂等 + 防本地重复计）。
+     */
+    private suspend fun deriveMissingPomodoroRecords(sessions: List<PomodoroSessionEntity>) {
+        val recsByDate = sessions.map { it.date }.distinct().associateWith { date ->
+            dao.getByDate(date).filter {
+                it.category == TimeCategory.INVESTMENT.name || it.category == TimeCategory.FIXED.name
+            }
+        }
+        val added = mutableSetOf<String>()
+        val derived = mutableListOf<TimeRecordEntity>()
+        for (s in sessions) {
+            val dateRecs = recsByDate[s.date] ?: emptyList()
+            val restEnd = s.createdAt
+            if (s.restMinutes > 0) {
+                addRecordIfAbsent(
+                    derived, added, dateRecs, TimeCategory.FIXED,
+                    restEnd - s.restMinutes * 60_000L, restEnd, s.date
+                )
+            }
+            if (s.focusMinutes > 0) {
+                val focusEnd = restEnd - s.restMinutes * 60_000L
+                addRecordIfAbsent(
+                    derived, added, dateRecs, TimeCategory.INVESTMENT,
+                    focusEnd - s.focusMinutes * 60_000L, focusEnd, s.date
+                )
+            }
+        }
+        if (derived.isNotEmpty()) dao.insertAll(derived)
+    }
+
+    private fun addRecordIfAbsent(
+        out: MutableList<TimeRecordEntity>,
+        added: MutableSet<String>,
+        existing: List<TimeRecordEntity>,
+        category: TimeCategory,
+        startTime: Long,
+        endTime: Long,
+        date: String
+    ) {
+        val key = "$date|${category.name}|$startTime|$endTime"
+        if (key in added) return
+        // 重叠守卫：已有同类别记录覆盖了 [startTime, endTime) 的任意部分即视为已存在
+        if (existing.any { it.startTime < endTime && startTime < it.endTime }) return
+        added += key
+        out += TimeRecordEntity(
+            id = endTime, // 兼容列（uid 才是主键）；取结束时刻，与本地记录的毫秒时间戳形态一致
+            category = category.name,
+            startTime = startTime,
+            endTime = endTime,
+            date = date
+        )
     }
 
     // ── Legacy SharedPreferences → Room migration (idempotent) ──

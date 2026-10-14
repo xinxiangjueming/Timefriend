@@ -48,6 +48,12 @@ class AppContainer(private val app: Application) {
     /** One-time migration of legacy SharedPreferences records into Room (idempotent). */
     fun migrateLegacyRecords() {
         appScope.launch { repository.migrateFromSharedPreferences() }
+        // 冷启动补齐：存量番茄钟周期若缺 INVESTMENT/FIXED 时间记录（修复版发布前
+        // 同步的周期只落了 pomodoro_sessions），派生补齐 → 总结饼图不再空缺（幂等）
+        appScope.launch {
+            runCatching { repository.backfillPomodoroTimeRecords() }
+                .onFailure { android.util.Log.e("TimefriendBackfill", "backfill failed", it) }
+        }
         // 启动手表数据通道（会话由本端主导建立，失败仅记日志不阻断主流程）
         runCatching { wearableLink }.onFailure { /* 无 xms-wearable AAR 时安全跳过 */ }
     }

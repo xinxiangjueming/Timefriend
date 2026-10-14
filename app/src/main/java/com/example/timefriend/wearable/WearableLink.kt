@@ -291,17 +291,27 @@ class WearableLink private constructor(
             }
             "pomo" -> {
                 val arr = obj.optJSONArray("d")
-                if (arr != null) {
-                    val sessions = parseSessions(arr)
-                    if (sessions.isNotEmpty()) {
-                        upsertSessions(sessions)
-                        Log.i(TAG, "received ${sessions.size} pomodoro session(s) from watch")
-                    } else {
-                        Log.d(TAG, "pomo payload empty / all invalid")
+                val sessions = arr?.let { parseSessions(it) } ?: emptyList()
+                if (sessions.isEmpty()) {
+                    Log.d(TAG, "pomo payload empty / all invalid")
+                    // 无新数据也回执（n=0），表端据此把 UI 置为「已同步」
+                    sendJson(nodeId, """{"t":"ok","n":0}""")
+                } else {
+                    // 回执延迟到 Room 写入完成后（携带实际落库行数 n）：
+                    // 此前是先回 ok 再异步写库，写入失败手表仍显示「已同步」，
+                    // 数据看似同步成功、统计里却永远不出现（2026-10-14 用户反馈）
+                    scope.launch {
+                        try {
+                            val n = repository.upsertWatchPomodoroSessions(sessions)
+                            Log.i(TAG, "received ${sessions.size} pomodoro session(s), inserted $n")
+                            sendJson(nodeId, """{"t":"ok","n":$n}""")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "upsertSessions failed", e)
+                            // 写库失败回 err：表端不置「已同步」，靠 (R)/重试暴露问题
+                            sendJson(nodeId, """{"t":"err"}""")
+                        }
                     }
                 }
-                // 无论有无新数据都回执，表端据此把 UI 置为「已同步」
-                sendJson(nodeId, """{"t":"ok"}""")
             }
             else -> Log.d(TAG, "unknown msg t=${obj.optString("t")}")
         }
@@ -326,17 +336,6 @@ class WearableLink private constructor(
             )
         }
         return out
-    }
-
-    /** 按 (date|createdAt|focusMinutes|restMinutes) 幂等写入（repository 内去重），重复同步不产生重复行。 */
-    private fun upsertSessions(sessions: List<PomodoroSessionEntity>) {
-        scope.launch {
-            try {
-                repository.upsertWatchPomodoroSessions(sessions)
-            } catch (e: Exception) {
-                Log.e(TAG, "upsertSessions failed", e)
-            }
-        }
     }
 
     private fun sendJson(nodeId: String, json: String) {

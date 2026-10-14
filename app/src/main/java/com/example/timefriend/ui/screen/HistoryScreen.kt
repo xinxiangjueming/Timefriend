@@ -226,10 +226,13 @@ fun HistoryScreen(
             if (pieRecords.isNotEmpty()) {
                 // 饼图弹性自适应：weight 分得剩余高度，aspectRatio 取宽高中较小值成正方形
                 //（替代原固定 180dp + 内部 verticalScroll 兜底——等高约束变矮时内容自动收缩）
+                // 实心饼图（2026-10-14 用户要求：原圆环形态视觉上像进度条，
+                // 改为与首页一致的实心饼；中心文字与首页同款一并关闭，数值看下方图例）
                 DayPieChart(
                     records = pieRecords,
-                    strokeWidth = 22.dp,
-                    modifier = Modifier.weight(1f).aspectRatio(1f)
+                    modifier = Modifier.weight(1f).aspectRatio(1f),
+                    filled = true,
+                    showCenterText = false
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 PieChartLegend(records = pieRecords)
@@ -254,7 +257,7 @@ fun HistoryScreen(
         }
     }
 
-    // 番茄钟周统计页：柱状图（左蓝=投入、右红=休息，最近 7 天）+ 底部两行汇总
+    // 番茄钟周统计页：柱状图（左蓝=投入、右红=休息，本周一~周日）+ 底部两行汇总
     //（同饼图页：去 Card 包裹，由外层统一卡片容器承载；柱图 weight 弹性自适应、无内部滚动）
     val pomodoroPage = @Composable {
         Column(
