@@ -30,7 +30,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * 结构对齐 SportLink：标题 + 年/月两个 NumberStepper（年 2020–2035 / 月 1–12）+
  * DialogButtonRow（取消/确定）。视觉走 [BlurredDialogScaffold] 统一壳：
- * 外部 Haze scrim（20dp 模糊 + 25% 压暗）+ 玻璃卡（textureBlur 10f + 高光 + tint 0.55），
+ * 高版本为官方 DialogContent 液态玻璃卡（外部压暗画进采样源），低版本为
+ * 外部 Haze scrim（20dp 模糊 + 25% 压暗）+ textureBlur 10f 玻璃卡，
  * 经 [DialogOverlay] 注册到宿主 slot 同窗口渲染。
  * 全部可见文本走 stringResource（标题/取消/确定五套语言同步）。
  *

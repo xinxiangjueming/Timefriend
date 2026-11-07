@@ -13,7 +13,7 @@ android {
         minSdk = 33
         targetSdk = 36
         versionCode = 2
-        versionName = "1.0.1"
+        versionName = "1.0.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -79,6 +79,11 @@ dependencies {
 
     // Haze（弹窗外部 scrim 同窗口采样模糊，对齐 SportLink v1 稳定版）
     implementation(libs.haze)
+
+    // Kyant Backdrop 2.0.1 — 液态玻璃（悬浮底栏 + 内部滑块，官方 LiquidBottomTabs 范式）
+    // shapes 提供 G2 连续圆角 Capsule，lens 折射要求 CornerBasedShape / RoundedRectangularShape
+    implementation(libs.backdrop)
+    implementation(libs.kyant.shapes)
 
     // OkHttp for WebDAV
     implementation(libs.okhttp)

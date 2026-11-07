@@ -2,7 +2,6 @@ package com.example.timefriend.ui.screen
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.IntOffset
@@ -21,20 +20,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +63,8 @@ import com.example.timefriend.ui.component.BlurToast
 import com.example.timefriend.ui.component.DialogOverlaySlot
 import com.example.timefriend.ui.component.DialogOverlayState
 import com.example.timefriend.ui.component.LocalDialogOverlay
-import com.example.timefriend.ui.component.dialogHazeSource
+import com.example.timefriend.ui.component.dialogDimColor
+import com.example.timefriend.ui.component.dialogScrimSource
 import com.example.timefriend.ui.theme.GlobalCornerRadius
 import dev.chrisbanes.haze.HazeState
 import com.example.timefriend.viewmodel.HistoryViewModel
@@ -77,23 +72,19 @@ import com.example.timefriend.viewmodel.MainViewModel
 import com.example.timefriend.viewmodel.TimerEffect
 import com.example.timefriend.viewmodel.TimerViewModel
 import com.example.timefriend.viewmodel.WebDavViewModel
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.BlurDefaults
-import top.yukonga.miuix.kmp.blur.drawBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlurEffect
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.squircle.squircleBackground
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import android.util.Log
+import com.example.timefriend.ui.component.LiquidBottomTab
+import com.example.timefriend.ui.component.LiquidBottomTabs
+import com.kyant.backdrop.backdrops.layerBackdrop as liquidLayerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop as rememberLiquidBackdrop
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
@@ -111,8 +102,18 @@ fun MainScreen(
     val historyState by historyViewModel.state.collectAsState()
     val webDavState by webDavViewModel.state.collectAsState()
     val backdrop = rememberLayerBackdrop()
-    // 弹窗浮层宿主：backdrop 复用首页常驻录制层（导航栏/Toast 共用），Haze 源仅弹窗活跃时挂
-    val dialogOverlayState = remember { DialogOverlayState(backdrop, HazeState()) }
+    // Kyant Backdrop 液态玻璃采样层：官方教程要求显式铺满背景色，否则底栏
+    // 边缘会折射到「背景之外的透明像素」；与 miuix backdrop 并列录制，同窗口兄弟消费
+    val backgroundColor = MiuixTheme.colorScheme.background
+    val liquidBackdrop = rememberLiquidBackdrop {
+        drawRect(backgroundColor)
+        drawContent()
+    }
+    // 官方 DialogContent 口径：弹窗活跃时把压暗层画进内容（屏幕显示且被 kyant
+    // backdrop 录制，卡片折射的是已压暗的背景）；低版本仍走 Haze 外部模糊。
+    // 分支判定在 DialogBlur.kt 的 dialogScrimSource / dialogScrimEffect 内。
+    val dimColor = dialogDimColor(!isSystemInDarkTheme())
+    val dialogOverlayState = remember { DialogOverlayState(backdrop, HazeState(), liquidBackdrop) }
     val context = LocalContext.current
     var toastMessage by remember { mutableStateOf<String?>(null) }
     var showSleepDialog by remember { mutableStateOf(false) }
@@ -130,14 +131,16 @@ fun MainScreen(
 
     CompositionLocalProvider(LocalDialogOverlay provides dialogOverlayState) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Layer 1: content captured for blur backdrop（layerBackdrop 常驻供导航栏/Toast；
-        // hazeSource 仅弹窗活跃时挂，供弹窗外部 scrim 同窗口采样）
+        // Layer 1: content captured for blur backdrop（miuix layerBackdrop 常驻供
+        // 低版本弹窗/Toast；kyant liquidLayerBackdrop 常驻供底栏与高版本液态玻璃弹窗；
+        // dialogScrimSource 仅弹窗活跃时挂：高版本画官方 dim 压暗进采样源，低版本挂 Haze 源）
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MiuixTheme.colorScheme.background)
                 .layerBackdrop(backdrop)
-                .dialogHazeSource(dialogOverlayState)
+                .liquidLayerBackdrop(liquidBackdrop)
+                .dialogScrimSource(dialogOverlayState, dimColor)
         ) {
             Scaffold(
                 modifier = Modifier.fillMaxSize().weight(1f),
@@ -515,170 +518,89 @@ fun MainScreen(
             }
         }
 
-        // Layer 4: floating nav bar with blur + settings
+        // Layer 4: 悬浮底栏（Kyant Backdrop 官方 LiquidBottomTabs 液态玻璃实现）
+        // 容器 vibrancy→blur→lens 折射；内部滑块用 CombinedBackdrop(页面层 + tabs 层)
+        // 做带色散的折射，按动放大 / 拖拽切 tab / 交互高光全部由官方组件承担。
         val showBottomBar = !mainState.showSettings || !settingsScrollingUp
-
-        // Debug: log navigation bar insets
-        val density = LocalDensity.current
-        val screenHeightDp = LocalConfiguration.current.screenHeightDp.dp
-        val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-        val navBarsBottomDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
-        val systemBarsBottomDp = with(density) { WindowInsets.systemBars.getBottom(this).toDp() }
-        val safeDrawingBottomDp = with(density) { WindowInsets.safeDrawing.getBottom(this).toDp() }
-        val imeBottomDp = with(density) { WindowInsets.ime.getBottom(this).toDp() }
-        val cutoutTopDp = with(density) { WindowInsets.displayCutout.getTop(this).toDp() }
-        LaunchedEffect(Unit) {
-            Log.d("NavBarDebug", "screen=${screenWidthDp}x${screenHeightDp}")
-            Log.d("NavBarDebug", "API=${android.os.Build.VERSION.SDK_INT}")
-            Log.d("NavBarDebug", "navigationBars.bottom=$navBarsBottomDp")
-            Log.d("NavBarDebug", "systemBars.bottom=$systemBarsBottomDp")
-            Log.d("NavBarDebug", "safeDrawing.bottom=$safeDrawingBottomDp")
-            Log.d("NavBarDebug", "ime.bottom=$imeBottomDp")
-            Log.d("NavBarDebug", "cutout.top=$cutoutTopDp")
-            Log.d("NavBarDebug", "bar hardcoded bottom padding=22dp, bar height=64dp")
-        }
         androidx.compose.animation.AnimatedVisibility(
             visible = showBottomBar,
             enter = androidx.compose.animation.slideInVertically(tween(200)) { it },
             exit = androidx.compose.animation.slideOutVertically(tween(200)) { it },
             modifier = Modifier.fillMaxSize()
         ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            val navBarShape = RoundedCornerShape(50.dp)
-            val selectedIndex = when {
-                mainState.showSettings -> 2
-                mainState.currentTab == 1 -> 1
-                else -> 0
-            }
-            val navItems = listOf(
-                Triple(Icons.Default.DateRange, stringResource(R.string.nav_today), 0),
-                Triple(Icons.AutoMirrored.Default.List, stringResource(R.string.nav_history), 1),
-                Triple(Icons.Default.Settings, stringResource(R.string.top_settings), 2)
-            )
-            val pillInset = 5.dp
-            val pillHeight = 54.dp
-            val pillAnim = remember { Animatable(0f) }
-            val density = LocalDensity.current
-            // 底栏宽度 = 屏短边 × 90%、上限 600dp（对齐 sportlink FloatingTabWidth 口径）：
-            // 横竖屏等宽、不随长边拉长，平板/大屏封顶防过度变胖；水平居中由外层
-            // AnimatedVisibility(BottomCenter) 承担
-            val navBarWidth = FloatingNavBarWidth()
-            // navBarWidth 必须入 key：横竖屏切换后 bar 宽变化，effect 若不重启会按旧宽度
-            // 定位 pill → 错位（sportlink 2026-08-24 拖拽倍速同族坑）
-            LaunchedEffect(selectedIndex, navBarWidth) {
-                val barWidthPx = with(density) { navBarWidth.toPx() }
-                val itemWidthPx = barWidthPx / navItems.size
-                val targetPx = itemWidthPx * selectedIndex + with(density) { pillInset.toPx() }
-                pillAnim.animateTo(targetPx, animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f))
-            }
             Box(
-                modifier = Modifier
-                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 8.dp)
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { navBarShape },
-                        effects = {
-                            textureBlurEffect(
-                                blurRadiusX = mainState.blurLevel,
-                                blurRadiusY = mainState.blurLevel
-                            )
-                        }
-                    )
-                    .clip(navBarShape)
-                    .background(
-                        MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-                        navBarShape
-                    )
-                    .height(64.dp)
-                    .width(navBarWidth)
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
             ) {
-                // Sliding pill indicator
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val itemWidth = maxWidth / navItems.size
-                    val pw = itemWidth - pillInset * 2
-                    val yPx = with(density) { 5.dp.roundToPx() }
-                    Box(
-                        modifier = Modifier
-                            .offset { IntOffset(pillAnim.value.toInt(), yPx) }
-                            .size(pw, pillHeight)
-                            .align(Alignment.TopStart)
-                            .clip(navBarShape)
-                            .background(Color.White.copy(alpha = 0.2f))
-                    )
+                val selectedIndex = when {
+                    mainState.showSettings -> 2
+                    mainState.currentTab == 1 -> 1
+                    else -> 0
                 }
-                // Navigation items
-                Row(modifier = Modifier.fillMaxSize()) {
-                    navItems.forEachIndexed { _, (icon, label, index) ->
-                        val isSelected = index == selectedIndex
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val itemAlpha by animateFloatAsState(
-                            targetValue = if (isSelected) 1f else 0.4f,
-                            animationSpec = tween(200),
-                            label = "nav_item_alpha"
-                        )
-                        val pressedScale by animateFloatAsState(
-                            targetValue = if (isPressed) 0.88f else 1f,
-                            animationSpec = tween(150),
-                            label = "nav_item_press"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .graphicsLayer {
-                                    scaleX = pressedScale
-                                    scaleY = pressedScale
-                                }
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = null
-                                ) {
-                                    when (index) {
-                                        0 -> {
-                                            if (mainState.showSettings) {
-                                                webDavViewModel.saveSettings()
-                                                webDavViewModel.resetStatus()
-                                            }
-                                            mainViewModel.switchTab(0)
-                                        }
-                                        1 -> {
-                                            if (mainState.showSettings) {
-                                                webDavViewModel.saveSettings()
-                                                webDavViewModel.resetStatus()
-                                            }
-                                            mainViewModel.switchTab(1)
-                                        }
-                                        2 -> {
-                                            webDavViewModel.loadSettings()
-                                            mainViewModel.showSettings()
-                                        }
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = label,
-                                    modifier = Modifier.size(22.dp),
-                                    tint = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = itemAlpha)
-                                )
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = itemAlpha)
-                                )
+                val navItems = listOf(
+                    Triple(Icons.Default.DateRange, stringResource(R.string.nav_today), 0),
+                    Triple(Icons.AutoMirrored.Default.List, stringResource(R.string.nav_history), 1),
+                    Triple(Icons.Default.Settings, stringResource(R.string.top_settings), 2)
+                )
+                // 底栏宽度 = 屏短边 × 90%、上限 600dp（对齐 sportlink FloatingTabWidth 口径）
+                val navBarWidth = FloatingNavBarWidth()
+
+                // 官方组件内部用 remember(selectedTabIndex) 持有 currentIndex、并在
+                // LaunchedEffect 中捕获 onTabSelected，故这里用 rememberUpdatedState
+                // 让 lambda 引用稳定且始终读到最新的 mainState / ViewModel 状态
+                val showSettingsState = rememberUpdatedState(mainState.showSettings)
+                fun selectNavTab(index: Int) {
+                    when (index) {
+                        0, 1 -> {
+                            if (showSettingsState.value) {
+                                webDavViewModel.saveSettings()
+                                webDavViewModel.resetStatus()
                             }
+                            mainViewModel.switchTab(index)
+                        }
+                        2 -> {
+                            webDavViewModel.loadSettings()
+                            mainViewModel.showSettings()
+                        }
+                    }
+                }
+                val selectedIndexState = rememberUpdatedState(selectedIndex)
+                val selectNavTabState = rememberUpdatedState<(Int) -> Unit>({ index -> selectNavTab(index) })
+
+                LiquidBottomTabs(
+                    selectedTabIndex = { selectedIndexState.value },
+                    onTabSelected = { index -> selectNavTabState.value(index) },
+                    backdrop = liquidBackdrop,
+                    tabsCount = navItems.size,
+                    modifier = Modifier
+                        .padding(
+                            bottom = WindowInsets.navigationBars
+                                .asPaddingValues()
+                                .calculateBottomPadding() + 8.dp
+                        )
+                        .width(navBarWidth)
+                ) {
+                    navItems.forEach { (icon, label, index) ->
+                        LiquidBottomTab(onClick = { selectNavTabState.value(index) }) {
+                            val isSelected = index == selectedIndex
+                            val itemColor = MiuixTheme.colorScheme.onSurfaceContainer
+                                .copy(alpha = if (isSelected) 1f else 0.4f)
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = label,
+                                modifier = Modifier.size(22.dp),
+                                tint = itemColor
+                            )
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = itemColor
+                            )
                         }
                     }
                 }
             }
-        }
         } // AnimatedVisibility
 
         // Layer 5: sleep input dialog（经 DialogOverlay 注册到宿主 slot 渲染，

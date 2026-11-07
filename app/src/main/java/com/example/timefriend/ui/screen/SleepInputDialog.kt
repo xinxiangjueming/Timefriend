@@ -29,15 +29,15 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 睡眠输入弹窗（外部 Haze scrim + 内部实心 tint 卡，无 miuix 模糊）。
+ * 睡眠输入弹窗（版本自适应玻璃卡）。
  *
  * 经 [DialogOverlay] 注册到宿主 slot（MainScreen Layer 6），与采样源同窗口兄弟：
- * - 外部 scrim：Haze 20dp 模糊 + 25% 压暗。
- * - 卡片：不透明实心 tint 卡（miuixBlur=false，浅色 White / 深色 #3A3A3A）+ 1dp 描边
- *   + 8dp 阴影；不使用 miuix textureBlur 玻璃模糊。
- * - 宽度由 BlurredDialogScaffold 内部 dialogWidthAdaptive 统一（横屏 60%/竖屏 90% 屏宽，
- *   对齐 SportLink dialogWidthAdaptive）。
- * - 点击外部关闭、返回键关闭由 scaffold / BackHandler 承担。
+ * - 高版本（API 33+）：官方 DialogContent 液态玻璃卡（colorControls → blur →
+ *   lens(depthEffect) + Highlight.Plain + containerColor），外部压暗画进采样源；
+ * - 低版本：外部 Haze 20dp 模糊 + 25% 压暗 + 不透明实心 tint 卡
+ *   （miuixBlur=false，浅色 White / 深色 #3A3A3A，无 miuix 模糊）。
+ * - 宽度由 BlurredDialogScaffold 内部 dialogWidthAdaptive 统一；
+ *   点击外部关闭、返回键关闭由 scaffold / BackHandler 承担。
  */
 @Composable
 fun SleepInputDialog(

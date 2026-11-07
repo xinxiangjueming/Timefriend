@@ -618,10 +618,11 @@ private fun CustomValueDialog(
 ) {
     var value by remember { mutableIntStateOf(initialValue) }
 
-    // 经 DialogOverlay 注册到 MainScreen 宿主 slot（同窗口浮层），
-    // 外部 Haze scrim（20dp 模糊 + 25% 压暗）+ 内部实心 tint 卡（miuixBlur=false，
-    // 浅色 White / 深色 #3A3A3A 不透明，无 miuix textureBlur 模糊）。
-    // 宽度由 BlurredDialogScaffold 内部 dialogWidthAdaptive 统一（对齐 SportLink）。
+    // 经 DialogOverlay 注册到 MainScreen 宿主 slot（同窗口浮层）。
+    // 高版本（API 33+）：官方 DialogContent 液态玻璃卡（外部压暗画进采样源）；
+    // 低版本：外部 Haze scrim（20dp 模糊 + 25% 压暗）+ 内部实心 tint 卡
+    // （miuixBlur=false，浅色 White / 深色 #3A3A3A 不透明，无 miuix textureBlur）。
+    // 宽度由 BlurredDialogScaffold 内部 dialogWidthAdaptive 统一。
     DialogOverlay {
         BackHandler { onDismiss() }
         BlurredDialogScaffold(onDismissRequest = onDismiss, miuixBlur = false) {
