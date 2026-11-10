@@ -3,7 +3,7 @@
 **爱时间（Timefriend）** 是一款运行在 Android 平台上的时间记录与番茄钟应用，采用 Jetpack Compose + MIUI 风格（miuix）界面，帮助你记录每天的时间开销、用番茄钟保持专注，并通过日历与统计图表回顾自己的时间分配。
 
 - 包名：`com.example.timefriend`
-- 当前版本：1.0.0（versionCode 1）
+- 当前版本：1.0.11（versionCode 2）
 - 最低支持：Android 13（API 33）
 
 ## 功能特性
