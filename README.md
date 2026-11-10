@@ -15,13 +15,13 @@
 | 历史统计 | 日历视图 + 「日 / 周 / 月」分段切换的饼图 + 番茄钟周汇总卡片 |
 | 云备份 | 基于 WebDAV 的备份：Room 数据库 WAL 检查点合并 → zstd 压缩 → 上传；恢复时按行键合并，**只补缺、不覆盖本地**；兼容旧版 JSON 备份 |
 | 手表联动 | 小米手表同步服务（Vela interconnect / xms-wearable），支持监听注册、断连重绑与开关唤起 |
-| 界面 | MIUI 风格毛玻璃（miuix-blur + Haze 同窗口采样）、深浅色主题、横竖屏双布局 |
+| 界面 | 悬浮底栏与弹窗的液态玻璃（Kyant Backdrop 折射 / 色散）、MIUI 风格毛玻璃（miuix-blur + Haze 同窗口采样）、深浅色主题、横竖屏双布局 |
 | 多语言 | 简体中文（默认）、繁体中文、English、日本語、한국어，跟随系统语言 |
 
 ## 技术栈
 
 - **语言**：Kotlin
-- **UI**：Jetpack Compose、MIUIX（miuix-ui / miuix-blur / miuix-icons 0.9.2）、Haze 1.7.2
+- **UI**：Jetpack Compose、MIUIX（miuix-ui / miuix-blur / miuix-icons 0.9.2）、Haze 1.7.2、Kyant Backdrop 2.0.1 + Shapes 1.2.1（液态玻璃）
 - **数据库**：Room（SQLite）
 - **网络**：OkHttp（WebDAV 协议）
 - **压缩**：zstd-jni（Zstandard）
@@ -74,6 +74,21 @@ Timefriend/
 - `docs/history-segmented-toggle.md` — 历史页「日 / 周 / 月」滑动胶囊分段控件解析
 - `docs/miuix-dialog-blur.md` — 基于 MIUIX 的弹窗毛玻璃（背景模糊）实现说明
 - `docs/segmented-toggle-spec.md` — 分段切换控件设计规格
+
+## 开源致谢
+
+本项目的界面效果建立在以下开源工作之上，谨向作者与贡献者致谢：
+
+| 项目 | 作者 / 维护者 | 在本项目中的作用 |
+| --- | --- | --- |
+| [Backdrop · Liquid Glass](https://github.com/Kyant0/AndroidLiquidGlass) | Kyant（Kyant0） | 悬浮底栏与弹窗的液态玻璃：背景采样、`lens` 折射与色散、按动放大与拖拽切 tab、交互高光；实现参照其官方文档与 catalog 的 `LiquidBottomTabs` / `DialogContent` 示例 |
+| [Shapes](https://github.com/Kyant0/Shapes) | Kyant（Kyant0） | G2 连续圆角 `Capsule` / `RoundedRectangle`，为 `lens` 提供可识别的折射形状 |
+| [Miuix](https://github.com/YuKongA/miuix) | YuKongA 及贡献者 | MIUI 风格组件与主题（miuix-ui / miuix-icons）；`miuix-blur` 的 `textureBlur` 用于低版本弹窗玻璃卡、Toast 与导航栏的同窗口采样模糊 |
+| [Haze](https://github.com/chrisbanes/haze) | Chris Banes | 低版本弹窗外部 scrim 的硬件加速模糊（20dp 模糊 + 压暗） |
+
+特别感谢 Kyant 开源的液态玻璃库及其开发文档、示例组件——底栏滑块的双层折射与色散、按动形变、弹窗玻璃卡的官方样式均直接参照其实现；同样感谢 Miuix 提供的模糊能力，使低版本设备仍能保持一致的毛玻璃观感。
+
+其余依赖（Jetpack Compose / AndroidX / Room、OkHttp、zstd-jni、Kotlin 协程、小米 Vela interconnect SDK 等）一并致谢。
 
 ## 开源协议
 
